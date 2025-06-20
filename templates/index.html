@@ -70,10 +70,8 @@
         </section>
     </main>
 
-<!-- ALL JAVASCRIPT IS NOW IN A SINGLE SCRIPT BLOCK TO FIX SCOPE ISSUES -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // DOM Elements
         const productGrid = document.getElementById('product-grid');
         const recommendationsGrid = document.getElementById('recommendations-grid');
         const cartCountElement = document.getElementById('cart-count');
@@ -83,18 +81,16 @@
         const cartIcon = document.getElementById('cart-icon');
         const cartItemsContainer = document.getElementById('cart-items-container');
 
-        // State Management
-        let cart = []; // Now stores objects: { sku: '...', name: '...' }
+        let cart = [];
         let currentPage = 1;
         let totalProducts = 0;
         const pageSize = 10;
-
-        // --- HELPER FUNCTIONS ---
 
         const createProductCard = (product, isRecommendation = false) => {
             const productSku = product.SKU_CODE || product.recommended_sku_code;
             const productName = product.PRODUCT_Name;
             const productCategory = product.CATEGORY;
+            // FIX: Directly access the 'cart' variable, which is in scope
             const isInCart = cart.some(item => item.sku === productSku);
 
             return `
@@ -106,8 +102,7 @@
                     `<p style="font-weight: bold; color: #333;">Score: ${product.similarity_score.toFixed(3)}</p>` :
                     `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
                 }
-            </div>
-        `;
+            </div>`;
         };
 
         const renderCart = () => {
@@ -118,13 +113,13 @@
                     <div class="cart-item">
                         <span>${item.name}</span>
                         <button class="cart-item-remove-btn" data-sku="${item.sku}">&times; Remove</button>
-                    </div>
-                `).join('');
+                    </div>`).join('');
             }
         };
         
         const updateRecommendations = async () => {
             recommendationsGrid.innerHTML = '<p class="status">Loading recommendations...</p>';
+            // FIX: Directly access the 'cart' variable, which is in scope
             const cartSkus = cart.map(i => i.sku);
 
             if (cartSkus.length === 0) {
@@ -133,11 +128,7 @@
             }
 
             try {
-                const response = await fetch('/cart_recommendations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ skus: cartSkus })
-                });
+                const response = await fetch('/cart_recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skus: cartSkus }) });
                 const data = await response.json();
                 if (data.recommendations && data.recommendations.length > 0) {
                     recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join('');
@@ -149,56 +140,48 @@
                 console.error('Error fetching recommendations:', error);
             }
         };
-
+        
         const updateCartView = () => {
-            cartCountElement.innerText = cart.length;
-            renderCart();
-            updateRecommendations();
+            cartCountElement.innerText = cart.length; renderCart(); updateRecommendations();
         };
 
         const fetchProducts = async () => {
-            loadMoreBtn.disabled = true;
-            loadMoreBtn.innerText = 'Loading...';
+            loadMoreBtn.disabled = true; loadMoreBtn.innerText = 'Loading...';
             try {
                 const response = await fetch(`/products?page=${currentPage}&size=${pageSize}`);
                 const data = await response.json();
-                if (data.products) {
+                if (data.products && data.products.length > 0) {
                     const productsHTML = data.products.map(p => createProductCard(p)).join('');
                     productGrid.insertAdjacentHTML('beforeend', productsHTML);
-                    totalProducts = data.total;
-                    currentPage++;
+                    totalProducts = data.total; currentPage++;
                     if (productGrid.children.length >= totalProducts) {
                         loadMoreBtn.style.display = 'none';
                     }
+                } else {
+                    // This handles the case where there are no products at all
+                    loadMoreBtn.style.display = 'none';
+                    if(currentPage === 1) productGrid.innerHTML = '<p class="status">No products found in the database.</p>';
                 }
             } catch (error) { console.error('Error fetching products:', error); }
             finally {
-                loadMoreBtn.disabled = false;
-                loadMoreBtn.innerText = 'Load More';
+                loadMoreBtn.disabled = false; loadMoreBtn.innerText = 'Load More';
             }
         };
-
-        // --- EVENT LISTENERS ---
 
         loadMoreBtn.addEventListener('click', fetchProducts);
         cartIcon.addEventListener('click', () => cartModal.style.display = 'flex');
         closeCartBtn.addEventListener('click', () => cartModal.style.display = 'none');
-        window.addEventListener('click', (event) => {
-            if (event.target === cartModal) cartModal.style.display = 'none';
-        });
+        window.addEventListener('click', (event) => { if (event.target === cartModal) cartModal.style.display = 'none'; });
 
         productGrid.addEventListener('click', (event) => {
             const button = event.target;
-            if (button.classList.contains('add-to-cart-btn')) {
+            if (button.tagName === 'BUTTON' && button.classList.contains('add-to-cart-btn')) {
                 const card = button.closest('.product-card');
                 const sku = card.dataset.sku;
                 const name = card.querySelector('h3').innerText;
-                
                 if (!cart.some(item => item.sku === sku)) {
                     cart.push({ sku, name });
-                    button.innerText = 'Added!';
-                    button.disabled = true;
-                    updateCartView();
+                    button.innerText = 'Added!'; button.disabled = true; updateCartView();
                 }
             }
         });
@@ -207,19 +190,16 @@
             if (event.target.classList.contains('cart-item-remove-btn')) {
                 const skuToRemove = event.target.dataset.sku;
                 cart = cart.filter(item => item.sku !== skuToRemove);
-                
                 const productCard = productGrid.querySelector(`.product-card[data-sku="${skuToRemove}"]`);
                 if (productCard) {
                     const button = productCard.querySelector('button');
-                    button.innerText = 'Add to Cart';
-                    button.disabled = false;
+                    button.innerText = 'Add to Cart'; button.disabled = false;
                 }
                 updateCartView();
             }
         });
 
-        // Initialize the page
-        fetchProducts();
+        fetchProducts(); // Initial fetch
     });
 </script>
 
