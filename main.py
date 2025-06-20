@@ -148,19 +148,17 @@ def get_cart_recommendations():
             FROM ML.WEIGHTS(MODEL `{PROJECT_ID}.{DATASET_ID}.{MODEL_NAME}`)
             WHERE processed_input = 'SKU_CODE'
           ),
-          CartAverageEmbedding AS (
-            -- 1. Get embeddings for items in the cart
-            SELECT
-              -- 2. Average the embedding vectors to create a "prototype" vector for the user's taste
-              ARRAY(
-                SELECT AVG(e.value)
-                FROM UNNEST(t.embedding) AS e WITH OFFSET AS i
-                GROUP BY i
-                ORDER BY i
-              ) AS avg_embedding
-            FROM ProductEmbeddings t
-            WHERE t.SKU_CODE IN UNNEST(@cart_skus)
-          )
+           CartAverageEmbedding AS (
+    SELECT
+      ARRAY(
+        SELECT AVG(e) -- Changed from AVG(e.value) to AVG(e)
+        FROM UNNEST(t.embedding) AS e WITH OFFSET AS i
+        GROUP BY i
+        ORDER BY i
+      ) AS avg_embedding
+    FROM ProductEmbeddings t
+    WHERE t.SKU_CODE IN UNNEST(@cart_skus)
+  )
         -- 3. Find items closest to this average embedding
         SELECT
             other_products.SKU_CODE as recommended_sku_code,
