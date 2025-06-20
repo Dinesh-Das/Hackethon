@@ -58,7 +58,8 @@ def get_all_products():
         print(f"Error fetching products: {e}")
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
-# --- THIS IS THE CORRECTED RECOMMENDATION ENDPOINT ---
+# In main.py, replace the entire function with this clean version.
+
 @app.route("/cart_recommendations", methods=["POST"])
 def get_cart_recommendations():
     request_json = request.get_json(silent=True)
@@ -76,13 +77,11 @@ def get_cart_recommendations():
             FROM ML.WEIGHTS(MODEL `{PROJECT_ID}.{DATASET_ID}.{MODEL_NAME}`)
             WHERE processed_input = 'SKU_CODE'
         ),
-        -- CRUCIAL STEP 1: Find embeddings for ONLY the SKUs that are BOTH in the cart AND in our model.
         ValidCartEmbeddings AS (
             SELECT embedding
             FROM ProductEmbeddings
             WHERE SKU_CODE IN UNNEST(@cart_skus)
         ),
-        -- CRUCIAL STEP 2: Calculate the average embedding using ONLY the valid embeddings.
         CartAverageEmbedding AS (
             SELECT
             ARRAY(
@@ -93,7 +92,6 @@ def get_cart_recommendations():
             ) AS avg_embedding
             FROM ValidCartEmbeddings t
         )
-        -- CRUCIAL STEP 3: Now find recommendations based on this valid average embedding.
         SELECT
             other_products.SKU_CODE as recommended_sku_code,
             details.PRODUCT_Name,
@@ -106,22 +104,23 @@ def get_cart_recommendations():
             `{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}` AS details
             ON details.SKU_CODE = other_products.SKU_CODE
         WHERE
-            -- Ensure the average vector is not NULL (handles cases where cart contains only invalid SKUs)
             cart.avg_embedding IS NOT NULL AND
-            -- Exclude items already in the cart
             other_products.SKU_CODE NOT IN UNNEST(@cart_skus)
         ORDER BY
             similarity_score DESC
         LIMIT 10;
     """
-    job_config = QueryJobConfig(query_parameters=[ArrayQueryParameter("cart_skus", "STRING", cart_skus)])
+    job__config = QueryJobConfig(query_parameters=[ArrayQueryParameter("cart_skus", "STRING", cart_skus)])
     try:
         query_job = client.query(sql_query, job_config=job_config)
         results = [dict(row) for row in query_job.result()]
+        # This will now correctly return the recommendations from BigQuery
         return jsonify({"recommendations": results}), 200
     except Exception as e:
-        print(f"An error occurred: {e}")
+        # Check logs for this error message if problems persist
+        print(f"An error occurred during query execution: {e}")
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
