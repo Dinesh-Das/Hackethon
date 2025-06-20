@@ -28,12 +28,25 @@ def get_all_products():
         count_query = f"SELECT COUNT(*) as total FROM `{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}`"
         count_job = client.query(count_query)
         total_rows = list(count_job.result())[0]['total']
+        # data_query = f"""
+        #     SELECT SKU_CODE, PRODUCT_Name, CATEGORY
+        #     FROM `{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}`
+        #     ORDER BY SKU_CODE
+        #     LIMIT @size OFFSET @offset;
+        # """
         data_query = f"""
-            SELECT SKU_CODE, PRODUCT_Name, CATEGORY
-            FROM `{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}`
-            ORDER BY SKU_CODE
-            LIMIT @size OFFSET @offset;
-        """
+    WITH ModelSKUs AS (
+      SELECT feature AS SKU_CODE
+      FROM ML.WEIGHTS(MODEL `{PROJECT_ID}.{DATASET_ID}.{MODEL_NAME}`)
+      WHERE processed_input = 'SKU_CODE'
+    )
+    SELECT
+      details.SKU_CODE, details.PRODUCT_Name, details.CATEGORY
+    FROM `{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}` AS details
+    INNER JOIN ModelSKUs ON details.SKU_CODE = ModelSKUs.SKU_CODE
+    ORDER BY details.SKU_CODE
+    LIMIT @size OFFSET @offset;
+    """
         job_config = QueryJobConfig(query_parameters=[
             ScalarQueryParameter("size", "INT64", size),
             ScalarQueryParameter("offset", "INT64", offset),
