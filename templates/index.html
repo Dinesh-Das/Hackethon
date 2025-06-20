@@ -1,84 +1,136 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Recommender</title>
+    <title>Cloud Recommender Shop</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 2rem; background-color: #f7f7f7; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        input[type="text"] { width: 100%; padding: 0.8rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #007bff; color: white; padding: 0.8rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
-        button:hover { background-color: #0056b3; }
-        #results { margin-top: 2rem; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { padding: 0.8rem; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f2f2f2; }
-        .status { font-style: italic; color: #555; }
+        :root { --primary-color: #007bff; --light-gray: #f8f9fa; --border-color: #dee2e6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: var(--light-gray); }
+        .header { background: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .cart-icon { position: relative; cursor: pointer; }
+        .cart-count { position: absolute; top: -10px; right: -10px; background-color: var(--primary-color); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; }
+        main { padding: 2rem; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }
+        .product-card { background: white; border: 1px solid var(--border-color); border-radius: 8px; text-align: center; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .product-card:hover { transform: translateY(-5px); }
+        .product-card img { max-width: 100%; height: 120px; object-fit: contain; margin-bottom: 1rem; }
+        .product-card h3 { font-size: 1rem; margin: 0.5rem 0; }
+        .product-card p { font-size: 0.9rem; color: #6c757d; }
+        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: auto; }
+        .product-card button:hover { background-color: #0056b3; }
+        .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
+        #recommendations-container { margin-top: 4rem; }
+        .status { text-align: center; color: #6c757d; font-size: 1.2rem; padding: 2rem; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Product Recommendation API</h1>
-    <p>Enter a product SKU to get similar items from the BigQuery ML model.</p>
-    
-    <form id="recommendation-form">
-        <label for="sku">SKU Code:</label>
-        <input type="text" id="sku" name="sku" placeholder="e.g., SKU000123" required>
-        <button type="submit">Get Recommendations</button>
-    </form>
+    <header class="header">
+        <h1>Cloud Shop</h1>
+        <div class="cart-icon">
+            <span>🛒</span>
+            <div id="cart-count" class="cart-count">0</div>
+        </div>
+    </header>
 
-    <div id="results">
-        <p class="status">Results will appear here...</p>
-    </div>
-</div>
+    <main>
+        <section id="products-container">
+            <h2 class="section-title">Products</h2>
+            <div id="product-grid" class="grid-container">
+                <!-- Products will be dynamically inserted here -->
+            </div>
+        </section>
+
+        <section id="recommendations-container">
+            <h2 class="section-title">Because You Added Items to Your Cart...</h2>
+            <div id="recommendations-grid" class="grid-container">
+                <p id="reco-status" class="status">Add items to your cart to see recommendations!</p>
+            </div>
+        </section>
+    </main>
 
 <script>
-    document.getElementById('recommendation-form').addEventListener('submit', async function(event) {
-        event.preventDefault();
-        const sku = document.getElementById('sku').value;
-        const resultsDiv = document.getElementById('results');
-        resultsDiv.innerHTML = '<p class="status">Loading...</p>';
+    document.addEventListener('DOMContentLoaded', () => {
+        const productGrid = document.getElementById('product-grid');
+        const recommendationsGrid = document.getElementById('recommendations-grid');
+        const cartCountElement = document.getElementById('cart-count');
+        const recoStatusElement = document.getElementById('reco-status');
 
-        try {
-            const response = await fetch('/recommend', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ sku: sku })
-            });
+        let cart = []; // Our state for the cart
 
-            const data = await response.json();
+        // Function to create a product card HTML
+        const createProductCard = (product, isRecommendation = false) => `
+            <div class="product-card" data-sku="${product.SKU_CODE || product.recommended_sku_code}">
+                <img src="https://via.placeholder.com/150?text=${product.CATEGORY || 'Item'}" alt="${product.PRODUCT_Name}">
+                <h3>${product.PRODUCT_Name}</h3>
+                <p>${product.CATEGORY}</p>
+                ${isRecommendation ? 
+                    `<p>Score: ${product.similarity_score.toFixed(3)}</p>` :
+                    `<button class="add-to-cart-btn" data-sku="${product.SKU_CODE}">Add to Cart</button>`
+                }
+            </div>
+        `;
 
-            if (!response.ok) {
-                resultsDiv.innerHTML = `<p class="status" style="color: red;">Error: ${data.error || data.message}</p>`;
+        // Fetch initial products on page load
+        const fetchProducts = async () => {
+            try {
+                const response = await fetch('/products');
+                const data = await response.json();
+                if (data.products) {
+                    productGrid.innerHTML = data.products.map(p => createProductCard(p)).join('');
+                }
+            } catch (error) {
+                productGrid.innerHTML = '<p class="status">Could not load products.</p>';
+                console.error('Error fetching products:', error);
+            }
+        };
+
+        // Fetch and display recommendations based on the cart
+        const updateRecommendations = async () => {
+            if (cart.length === 0) {
+                recommendationsGrid.innerHTML = '<p id="reco-status" class="status">Add items to your cart to see recommendations!</p>';
                 return;
             }
-            
-            if (data.recommendations && data.recommendations.length > 0) {
-                // Corrected the header to be more user-friendly
-                let tableHTML = '<table><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th>Score</th></tr></thead><tbody>';
-                data.recommendations.forEach(rec => {
-                    tableHTML += `<tr>
-                        <td>${rec.recommended_sku_code}</td>
-                        <td>${rec.PRODUCT_Name}</td>
-                        <td>${rec.CATEGORY}</td>
-                        <td>${rec.similarity_score.toFixed(4)}</td>
-                    </tr>`;
-                });
-                tableHTML += '</tbody></table>';
-                resultsDiv.innerHTML = tableHTML;
-            } else {
-                 resultsDiv.innerHTML = `<p class="status">No recommendations found.</p>`;
-            }
 
-        } catch (error) {
-            resultsDiv.innerHTML = `<p class="status" style="color: red;">Failed to fetch from API. Is the server running? Error: ${error}</p>`;
-        }
+            recoStatusElement.innerText = 'Loading recommendations...';
+
+            try {
+                const response = await fetch('/cart_recommendations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skus: cart })
+                });
+                const data = await response.json();
+                if (data.recommendations && data.recommendations.length > 0) {
+                    recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join('');
+                } else {
+                    recommendationsGrid.innerHTML = '<p class="status">No recommendations found for this combination.</p>';
+                }
+            } catch (error) {
+                recommendationsGrid.innerHTML = '<p class="status">Could not load recommendations.</p>';
+                console.error('Error fetching recommendations:', error);
+            }
+        };
+
+        // Handle clicks on "Add to Cart" buttons
+        productGrid.addEventListener('click', (event) => {
+            if (event.target.classList.contains('add-to-cart-btn')) {
+                const sku = event.target.dataset.sku;
+                if (!cart.includes(sku)) {
+                    cart.push(sku);
+                    cartCountElement.innerText = cart.length;
+                    updateRecommendations();
+                    // Visually indicate the item was added
+                    event.target.innerText = 'Added!';
+                    event.target.disabled = true;
+                }
+            }
+        });
+
+        // Initialize the page
+        fetchProducts();
     });
 </script>
 
