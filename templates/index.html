@@ -60,11 +60,13 @@
             }
             
             if (data.recommendations && data.recommendations.length > 0) {
-                let tableHTML = '<table><thead><tr><th>SKU</th><th>PRODUCT_NAME</th><th>Category</th><th>Score</th></tr></thead><tbody>';
+                // Corrected the header to be more user-friendly
+                let tableHTML = '<table><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th>Score</th></tr></thead><tbody>';
                 data.recommendations.forEach(rec => {
                     tableHTML += `<tr>
                         <td>${rec.recommended_sku_code}</td>
-                        <td>${rec.PRODUCT_NAME}</td>
+                        {/* THE FIX IS HERE: rec.PRODUCT_Name (camelCase) */}
+                        <td>${rec.PRODUCT_Name}</td>
                         <td>${rec.CATEGORY}</td>
                         <td>${rec.similarity_score.toFixed(4)}</td>
                     </tr>`;
