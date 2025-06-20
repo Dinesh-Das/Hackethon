@@ -22,9 +22,10 @@
         button:disabled { background-color: #6c757d; cursor: not-allowed; }
         .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
         .pagination-container { text-align: center; margin-top: 2rem; }
+        .status { text-align: center; color: #6c757d; font-size: 1.2rem; padding: 2rem; }
         /* Cart Modal Styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-content { background: white; padding: 2rem; border-radius: 8px; width: 90%; max-width: 500px; }
+        .modal-content { background: white; padding: 2rem; border-radius: 8px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
         .modal-header h2 { margin: 0; }
         .close-btn { font-size: 1.5rem; border: none; background: none; cursor: pointer; }
@@ -40,9 +41,7 @@
                 <h2>Your Cart</h2>
                 <button id="close-cart-btn" class="close-btn">&times;</button>
             </div>
-            <div id="cart-items-container">
-                <!-- Cart items will be dynamically inserted here -->
-            </div>
+            <div id="cart-items-container"></div>
         </div>
     </div>
 
@@ -71,6 +70,7 @@
         </section>
     </main>
 
+<!-- ALL JAVASCRIPT IS NOW IN A SINGLE SCRIPT BLOCK TO FIX SCOPE ISSUES -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         // DOM Elements
@@ -89,8 +89,26 @@
         let totalProducts = 0;
         const pageSize = 10;
 
-        // --- RENDER & VIEW FUNCTIONS ---
-        const createProductCard = (product, isReco = false) => `...`; // (No change from previous version)
+        // --- HELPER FUNCTIONS ---
+
+        const createProductCard = (product, isRecommendation = false) => {
+            const productSku = product.SKU_CODE || product.recommended_sku_code;
+            const productName = product.PRODUCT_Name;
+            const productCategory = product.CATEGORY;
+            const isInCart = cart.some(item => item.sku === productSku);
+
+            return `
+            <div class="product-card" data-sku="${productSku}">
+                <img src="https://via.placeholder.com/150?text=${productCategory || 'Item'}" alt="${productName}">
+                <h3>${productName}</h3>
+                <p>${productCategory || 'N/A'}</p>
+                ${isRecommendation ? 
+                    `<p style="font-weight: bold; color: #333;">Score: ${product.similarity_score.toFixed(3)}</p>` :
+                    `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
+                }
+            </div>
+        `;
+        };
 
         const renderCart = () => {
             if (cart.length === 0) {
@@ -104,6 +122,33 @@
                 `).join('');
             }
         };
+        
+        const updateRecommendations = async () => {
+            recommendationsGrid.innerHTML = '<p class="status">Loading recommendations...</p>';
+            const cartSkus = cart.map(i => i.sku);
+
+            if (cartSkus.length === 0) {
+                recommendationsGrid.innerHTML = '<p class="status">Add items to your cart to see recommendations!</p>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/cart_recommendations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skus: cartSkus })
+                });
+                const data = await response.json();
+                if (data.recommendations && data.recommendations.length > 0) {
+                    recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join('');
+                } else {
+                    recommendationsGrid.innerHTML = '<p class="status">No recommendations found for this combination.</p>';
+                }
+            } catch (error) {
+                recommendationsGrid.innerHTML = '<p class="status">Could not load recommendations.</p>';
+                console.error('Error fetching recommendations:', error);
+            }
+        };
 
         const updateCartView = () => {
             cartCountElement.innerText = cart.length;
@@ -111,7 +156,6 @@
             updateRecommendations();
         };
 
-        // --- API & DATA FUNCTIONS ---
         const fetchProducts = async () => {
             loadMoreBtn.disabled = true;
             loadMoreBtn.innerText = 'Loading...';
@@ -123,7 +167,6 @@
                     productGrid.insertAdjacentHTML('beforeend', productsHTML);
                     totalProducts = data.total;
                     currentPage++;
-                    // Hide button if all products are loaded
                     if (productGrid.children.length >= totalProducts) {
                         loadMoreBtn.style.display = 'none';
                     }
@@ -135,9 +178,8 @@
             }
         };
 
-        const updateRecommendations = async () => { /* ... (No change from previous version) */ };
-
         // --- EVENT LISTENERS ---
+
         loadMoreBtn.addEventListener('click', fetchProducts);
         cartIcon.addEventListener('click', () => cartModal.style.display = 'flex');
         closeCartBtn.addEventListener('click', () => cartModal.style.display = 'none');
@@ -166,7 +208,6 @@
                 const skuToRemove = event.target.dataset.sku;
                 cart = cart.filter(item => item.sku !== skuToRemove);
                 
-                // Re-enable the button on the product grid
                 const productCard = productGrid.querySelector(`.product-card[data-sku="${skuToRemove}"]`);
                 if (productCard) {
                     const button = productCard.querySelector('button');
@@ -180,58 +221,6 @@
         // Initialize the page
         fetchProducts();
     });
-</script>
-
-<!-- Helper script for unchanged functions to keep main block clean -->
-<script>
-    const createProductCard = (product, isRecommendation = false) => {
-        const productSku = product.SKU_CODE || product.recommended_sku_code;
-        const productName = product.PRODUCT_Name;
-        const productCategory = product.CATEGORY;
-        // Check if the item is already in the cart to disable the button initially
-        const cartSkus = window.cart ? window.cart.map(i => i.sku) : [];
-        const isInCart = cartSkus.includes(productSku);
-
-        return `
-        <div class="product-card" data-sku="${productSku}">
-            <img src="https://via.placeholder.com/150?text=${productCategory || 'Item'}" alt="${productName}">
-            <h3>${productName}</h3>
-            <p>${productCategory}</p>
-            ${isRecommendation ? 
-                `<p style="font-weight: bold; color: #333;">Score: ${product.similarity_score.toFixed(3)}</p>` :
-                `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
-            }
-        </div>
-    `;
-    };
-
-    const updateRecommendations = async () => {
-        const recommendationsGrid = document.getElementById('recommendations-grid');
-        recommendationsGrid.innerHTML = '<p class="status">Loading recommendations...</p>';
-        const cartSkus = window.cart ? window.cart.map(i => i.sku) : [];
-
-        if (cartSkus.length === 0) {
-            recommendationsGrid.innerHTML = '<p class="status">Add items to your cart to see recommendations!</p>';
-            return;
-        }
-
-        try {
-            const response = await fetch('/cart_recommendations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ skus: cartSkus })
-            });
-            const data = await response.json();
-            if (data.recommendations && data.recommendations.length > 0) {
-                recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join('');
-            } else {
-                recommendationsGrid.innerHTML = '<p class="status">No recommendations found for this combination.</p>';
-            }
-        } catch (error) {
-            recommendationsGrid.innerHTML = '<p class="status">Could not load recommendations.</p>';
-            console.error('Error fetching recommendations:', error);
-        }
-    };
 </script>
 
 </body>
