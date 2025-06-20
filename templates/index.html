@@ -60,7 +60,7 @@
             }
             
             if (data.recommendations && data.recommendations.length > 0) {
-                let tableHTML = '<table><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th>Score</th></tr></thead><tbody>';
+                let tableHTML = '<table><thead><tr><th>SKU</th><th>Product Name</th><th>Category</th><th>Score</th></tr></thead><tbody>';
                 data.recommendations.forEach(rec => {
                     tableHTML += `<tr>
                         <td>${rec.recommended_sku_code}</td>
