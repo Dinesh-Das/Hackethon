@@ -65,7 +65,6 @@
                 data.recommendations.forEach(rec => {
                     tableHTML += `<tr>
                         <td>${rec.recommended_sku_code}</td>
-                        {/* THE FIX IS HERE: rec.PRODUCT_Name (camelCase) */}
                         <td>${rec.PRODUCT_Name}</td>
                         <td>${rec.CATEGORY}</td>
                         <td>${rec.similarity_score.toFixed(4)}</td>
