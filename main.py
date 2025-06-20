@@ -33,7 +33,7 @@ def get_recommendations():
 
     target_sku = request_json['sku']
 
-    # This SQL should be consistent. We'll use PRODUCT_NAME.
+    # Note: The column name was corrected to PRODUCT_Name
     # Ensure this column exists in your `ProductDetails` table.
     sql_query = f"""
         WITH ProductEmbeddings AS (
@@ -55,7 +55,7 @@ def get_recommendations():
         SELECT
           rec.recommended_sku_code,
           rec.similarity_score,
-          details.PRODUCT_NAME,
+          details.PRODUCT_Name,
           details.CATEGORY,
           details.SUB_CATEGORY,
           details.COLOUR
