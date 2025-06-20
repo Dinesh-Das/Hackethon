@@ -1,0 +1,10 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-t', 'gcr.io/$PROJECT_ID/your-image-name',
+    '-f', 'dockerfile',  # <-- Add this line to specify the lowercase name
+    '.'
+  ]
+images:
+- 'gcr.io/$PROJECT_ID/your-image-name'
