@@ -1,0 +1,111 @@
+[{
+  "SKU_CODE": "SKU0418",
+  "PRODUCT_NAME": "Set of 3 Abstract Prints",
+  "COLOUR": "Cream",
+  "CATEGORY": "Art",
+  "SUB_CATEGORY": "Prints",
+  "TAGS": "[\"minimalist\", \"modern\", \"cream\", \"giftable\", \"contemporary\", \"comfort\"]",
+  "COLLECTIVE_SET": "[\"home essentials\"]",
+  "COST_PRICE": "416.93",
+  "SELL_PRICE": "726.58"
+}, {
+  "SKU_CODE": "SKU0761",
+  "PRODUCT_NAME": "Tropical Leaf Print",
+  "COLOUR": "Blue",
+  "CATEGORY": "Art",
+  "SUB_CATEGORY": "Prints",
+  "TAGS": "[\"storage\", \"rustic\", \"unique\", \"blue\", \"stylish\"]",
+  "COLLECTIVE_SET": "[\"boho chic set\", \"home essentials\"]",
+  "COST_PRICE": "367.28",
+  "SELL_PRICE": "1018.33"
+}, {
+  "SKU_CODE": "SKU0970",
+  "PRODUCT_NAME": "Walnut Abstract Figurine",
+  "COLOUR": "Cream",
+  "CATEGORY": "Art",
+  "SUB_CATEGORY": "Sculpture",
+  "TAGS": "[\"walnut\", \"modern\", \"soft\", \"cream\", \"decor\"]",
+  "COLLECTIVE_SET": "[\"rustic retreat collection\", \"home essentials\"]",
+  "COST_PRICE": "197.77",
+  "SELL_PRICE": "560.48"
+}, {
+  "SKU_CODE": "SKU0811",
+  "PRODUCT_NAME": "Bamboo Side Table",
+  "COLOUR": "Blue",
+  "CATEGORY": "Furniture",
+  "SUB_CATEGORY": "Table",
+  "TAGS": "[\"soft\", \"giftable\", \"decor\", \"coastal\", \"seating\", \"bamboo\", \"blue\", \"contemporary\"]",
+  "COLLECTIVE_SET": "[\"designer\u0027s choice\"]",
+  "COST_PRICE": "236.88",
+  "SELL_PRICE": "468.57"
+}, {
+  "SKU_CODE": "SKU0790",
+  "PRODUCT_NAME": "Geometric Serving Bowl",
+  "COLOUR": "Terracotta",
+  "CATEGORY": "Kitchen",
+  "SUB_CATEGORY": "Serveware",
+  "TAGS": "[\"space-saving\", \"rustic\", \"kitchen\", \"classic\", \"terracotta\", \"contemporary\"]",
+  "COLLECTIVE_SET": "[\"home essentials\"]",
+  "COST_PRICE": "77.58",
+  "SELL_PRICE": "195.09"
+}, {
+  "SKU_CODE": "SKU0378",
+  "PRODUCT_NAME": "Wool Kitchen Utensil Set",
+  "COLOUR": "Brown",
+  "CATEGORY": "Kitchen",
+  "SUB_CATEGORY": "Utensils",
+  "TAGS": "[\"handmade\", \"wool\", \"decor\", \"kitchen\", \"brown\", \"home\", \"glam\"]",
+  "COLLECTIVE_SET": "[\"home essentials\"]",
+  "COST_PRICE": "108.14",
+  "SELL_PRICE": "200.2"
+}, {
+  "SKU_CODE": "SKU0166",
+  "PRODUCT_NAME": "Plush Flush Mount Light",
+  "COLOUR": "Blue",
+  "CATEGORY": "Lighting",
+  "SUB_CATEGORY": "Ceiling Lamp",
+  "TAGS": "[\"modern\", \"stylish\", \"handmade\", \"blue\"]",
+  "COLLECTIVE_SET": "[\"office setup\", \"home essentials\"]",
+  "COST_PRICE": "302.59",
+  "SELL_PRICE": "789.16"
+}, {
+  "SKU_CODE": "SKU0287",
+  "PRODUCT_NAME": "Wool Flush Mount Light",
+  "COLOUR": "Blue",
+  "CATEGORY": "Lighting",
+  "SUB_CATEGORY": "Ceiling Lamp",
+  "TAGS": "[\"modern\", \"farmhouse\", \"durable\", \"handmade\", \"wool\", \"bohemian\", \"blue\"]",
+  "COLLECTIVE_SET": "[\"designer\u0027s choice\"]",
+  "COST_PRICE": "357.0",
+  "SELL_PRICE": "697.3"
+}, {
+  "SKU_CODE": "SKU1000",
+  "PRODUCT_NAME": "Marble Arch Floor Lamp",
+  "COLOUR": "Blue",
+  "CATEGORY": "Lighting",
+  "SUB_CATEGORY": "Floor Lamp",
+  "TAGS": "[\"storage\", \"giftable\", \"marble\", \"blue\", \"lighting\"]",
+  "COLLECTIVE_SET": "[\"dining collection\", \"designer\u0027s choice\"]",
+  "COST_PRICE": "235.82",
+  "SELL_PRICE": "401.12"
+}, {
+  "SKU_CODE": "SKU0252",
+  "PRODUCT_NAME": "LED Wall Sconce",
+  "COLOUR": "Blue",
+  "CATEGORY": "Lighting",
+  "SUB_CATEGORY": "Wall Sconce",
+  "TAGS": "[\"portable\", \"industrial\", \"giftable\", \"decor\", \"coastal\", \"blue\"]",
+  "COLLECTIVE_SET": "[\"boho chic set\", \"living room set\", \"home essentials\"]",
+  "COST_PRICE": "128.04",
+  "SELL_PRICE": "372.39"
+}, {
+  "SKU_CODE": "SKU0510",
+  "PRODUCT_NAME": "Wool Cotton Sheet Set",
+  "COLOUR": "Copper",
+  "CATEGORY": "Textiles",
+  "SUB_CATEGORY": "Sheets",
+  "TAGS": "[\"farmhouse\", \"copper\", \"cotton\", \"industrial\", \"wool\", \"decor\", \"stylish\", \"lighting\"]",
+  "COLLECTIVE_SET": "[\"office setup\", \"complete decor kit\"]",
+  "COST_PRICE": "34.19",
+  "SELL_PRICE": "59.13"
+}]
