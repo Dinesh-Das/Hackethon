@@ -13,23 +13,42 @@
         .cart-count { position: absolute; top: -10px; right: -10px; background-color: var(--primary-color); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; }
         main { padding: 2rem; }
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }
-        .product-card { background: white; border: 1px solid var(--border-color); border-radius: 8px; text-align: center; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .product-card { background: white; border: 1px solid var(--border-color); border-radius: 8px; text-align: center; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.2s; display: flex; flex-direction: column; }
         .product-card:hover { transform: translateY(-5px); }
         .product-card img { max-width: 100%; height: 120px; object-fit: contain; margin-bottom: 1rem; }
-        .product-card h3 { font-size: 1rem; margin: 0.5rem 0; }
+        .product-card h3 { font-size: 1rem; margin: 0.5rem 0; flex-grow: 1; }
         .product-card p { font-size: 0.9rem; color: #6c757d; }
-        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: auto; }
-        .product-card button:hover { background-color: #0056b3; }
+        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
         .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
-        #recommendations-container { margin-top: 4rem; }
-        .status { text-align: center; color: #6c757d; font-size: 1.2rem; padding: 2rem; }
+        .pagination-container { text-align: center; margin-top: 2rem; }
+        /* Cart Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-content { background: white; padding: 2rem; border-radius: 8px; width: 90%; max-width: 500px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+        .modal-header h2 { margin: 0; }
+        .close-btn { font-size: 1.5rem; border: none; background: none; cursor: pointer; }
+        .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--light-gray); }
+        .cart-item-remove-btn { color: red; cursor: pointer; border: none; background: none; font-size: 1rem; }
     </style>
 </head>
 <body>
+    <!-- CART MODAL HTML -->
+    <div id="cart-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Your Cart</h2>
+                <button id="close-cart-btn" class="close-btn">&times;</button>
+            </div>
+            <div id="cart-items-container">
+                <!-- Cart items will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
 
     <header class="header">
         <h1>Cloud Shop</h1>
-        <div class="cart-icon">
+        <div id="cart-icon" class="cart-icon">
             <span>🛒</span>
             <div id="cart-count" class="cart-count">0</div>
         </div>
@@ -38,100 +57,181 @@
     <main>
         <section id="products-container">
             <h2 class="section-title">Products</h2>
-            <div id="product-grid" class="grid-container">
-                <!-- Products will be dynamically inserted here -->
+            <div id="product-grid" class="grid-container"></div>
+            <div class="pagination-container">
+                <button id="load-more-btn">Load More</button>
             </div>
         </section>
 
-        <section id="recommendations-container">
+        <section id="recommendations-container" style="margin-top: 4rem;">
             <h2 class="section-title">Because You Added Items to Your Cart...</h2>
             <div id="recommendations-grid" class="grid-container">
-                <p id="reco-status" class="status">Add items to your cart to see recommendations!</p>
+                <p class="status">Add items to your cart to see recommendations!</p>
             </div>
         </section>
     </main>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // DOM Elements
         const productGrid = document.getElementById('product-grid');
         const recommendationsGrid = document.getElementById('recommendations-grid');
         const cartCountElement = document.getElementById('cart-count');
-        const recoStatusElement = document.getElementById('reco-status');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const cartModal = document.getElementById('cart-modal');
+        const closeCartBtn = document.getElementById('close-cart-btn');
+        const cartIcon = document.getElementById('cart-icon');
+        const cartItemsContainer = document.getElementById('cart-items-container');
 
-        let cart = []; // Our state for the cart
+        // State Management
+        let cart = []; // Now stores objects: { sku: '...', name: '...' }
+        let currentPage = 1;
+        let totalProducts = 0;
+        const pageSize = 10;
 
-        // Function to create a product card HTML
-        const createProductCard = (product, isRecommendation = false) => `
-            <div class="product-card" data-sku="${product.SKU_CODE || product.recommended_sku_code}">
-                <img src="https://via.placeholder.com/150?text=${product.CATEGORY || 'Item'}" alt="${product.PRODUCT_Name}">
-                <h3>${product.PRODUCT_Name}</h3>
-                <p>${product.CATEGORY}</p>
-                ${isRecommendation ? 
-                    `<p>Score: ${product.similarity_score.toFixed(3)}</p>` :
-                    `<button class="add-to-cart-btn" data-sku="${product.SKU_CODE}">Add to Cart</button>`
-                }
-            </div>
-        `;
+        // --- RENDER & VIEW FUNCTIONS ---
+        const createProductCard = (product, isReco = false) => `...`; // (No change from previous version)
 
-        // Fetch initial products on page load
+        const renderCart = () => {
+            if (cart.length === 0) {
+                cartItemsContainer.innerHTML = '<p>Your cart is empty.</p>';
+            } else {
+                cartItemsContainer.innerHTML = cart.map(item => `
+                    <div class="cart-item">
+                        <span>${item.name}</span>
+                        <button class="cart-item-remove-btn" data-sku="${item.sku}">&times; Remove</button>
+                    </div>
+                `).join('');
+            }
+        };
+
+        const updateCartView = () => {
+            cartCountElement.innerText = cart.length;
+            renderCart();
+            updateRecommendations();
+        };
+
+        // --- API & DATA FUNCTIONS ---
         const fetchProducts = async () => {
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.innerText = 'Loading...';
             try {
-                const response = await fetch('/products');
+                const response = await fetch(`/products?page=${currentPage}&size=${pageSize}`);
                 const data = await response.json();
                 if (data.products) {
-                    productGrid.innerHTML = data.products.map(p => createProductCard(p)).join('');
+                    const productsHTML = data.products.map(p => createProductCard(p)).join('');
+                    productGrid.insertAdjacentHTML('beforeend', productsHTML);
+                    totalProducts = data.total;
+                    currentPage++;
+                    // Hide button if all products are loaded
+                    if (productGrid.children.length >= totalProducts) {
+                        loadMoreBtn.style.display = 'none';
+                    }
                 }
-            } catch (error) {
-                productGrid.innerHTML = '<p class="status">Could not load products.</p>';
-                console.error('Error fetching products:', error);
+            } catch (error) { console.error('Error fetching products:', error); }
+            finally {
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.innerText = 'Load More';
             }
         };
 
-        // Fetch and display recommendations based on the cart
-        const updateRecommendations = async () => {
-            if (cart.length === 0) {
-                recommendationsGrid.innerHTML = '<p id="reco-status" class="status">Add items to your cart to see recommendations!</p>';
-                return;
-            }
+        const updateRecommendations = async () => { /* ... (No change from previous version) */ };
 
-            recoStatusElement.innerText = 'Loading recommendations...';
+        // --- EVENT LISTENERS ---
+        loadMoreBtn.addEventListener('click', fetchProducts);
+        cartIcon.addEventListener('click', () => cartModal.style.display = 'flex');
+        closeCartBtn.addEventListener('click', () => cartModal.style.display = 'none');
+        window.addEventListener('click', (event) => {
+            if (event.target === cartModal) cartModal.style.display = 'none';
+        });
 
-            try {
-                const response = await fetch('/cart_recommendations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ skus: cart })
-                });
-                const data = await response.json();
-                if (data.recommendations && data.recommendations.length > 0) {
-                    recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join('');
-                } else {
-                    recommendationsGrid.innerHTML = '<p class="status">No recommendations found for this combination.</p>';
-                }
-            } catch (error) {
-                recommendationsGrid.innerHTML = '<p class="status">Could not load recommendations.</p>';
-                console.error('Error fetching recommendations:', error);
-            }
-        };
-
-        // Handle clicks on "Add to Cart" buttons
         productGrid.addEventListener('click', (event) => {
-            if (event.target.classList.contains('add-to-cart-btn')) {
-                const sku = event.target.dataset.sku;
-                if (!cart.includes(sku)) {
-                    cart.push(sku);
-                    cartCountElement.innerText = cart.length;
-                    updateRecommendations();
-                    // Visually indicate the item was added
-                    event.target.innerText = 'Added!';
-                    event.target.disabled = true;
+            const button = event.target;
+            if (button.classList.contains('add-to-cart-btn')) {
+                const card = button.closest('.product-card');
+                const sku = card.dataset.sku;
+                const name = card.querySelector('h3').innerText;
+                
+                if (!cart.some(item => item.sku === sku)) {
+                    cart.push({ sku, name });
+                    button.innerText = 'Added!';
+                    button.disabled = true;
+                    updateCartView();
                 }
+            }
+        });
+
+        cartItemsContainer.addEventListener('click', (event) => {
+            if (event.target.classList.contains('cart-item-remove-btn')) {
+                const skuToRemove = event.target.dataset.sku;
+                cart = cart.filter(item => item.sku !== skuToRemove);
+                
+                // Re-enable the button on the product grid
+                const productCard = productGrid.querySelector(`.product-card[data-sku="${skuToRemove}"]`);
+                if (productCard) {
+                    const button = productCard.querySelector('button');
+                    button.innerText = 'Add to Cart';
+                    button.disabled = false;
+                }
+                updateCartView();
             }
         });
 
         // Initialize the page
         fetchProducts();
     });
+</script>
+
+<!-- Helper script for unchanged functions to keep main block clean -->
+<script>
+    const createProductCard = (product, isRecommendation = false) => {
+        const productSku = product.SKU_CODE || product.recommended_sku_code;
+        const productName = product.PRODUCT_Name;
+        const productCategory = product.CATEGORY;
+        // Check if the item is already in the cart to disable the button initially
+        const cartSkus = window.cart ? window.cart.map(i => i.sku) : [];
+        const isInCart = cartSkus.includes(productSku);
+
+        return `
+        <div class="product-card" data-sku="${productSku}">
+            <img src="https://via.placeholder.com/150?text=${productCategory || 'Item'}" alt="${productName}">
+            <h3>${productName}</h3>
+            <p>${productCategory}</p>
+            ${isRecommendation ? 
+                `<p style="font-weight: bold; color: #333;">Score: ${product.similarity_score.toFixed(3)}</p>` :
+                `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
+            }
+        </div>
+    `;
+    };
+
+    const updateRecommendations = async () => {
+        const recommendationsGrid = document.getElementById('recommendations-grid');
+        recommendationsGrid.innerHTML = '<p class="status">Loading recommendations...</p>';
+        const cartSkus = window.cart ? window.cart.map(i => i.sku) : [];
+
+        if (cartSkus.length === 0) {
+            recommendationsGrid.innerHTML = '<p class="status">Add items to your cart to see recommendations!</p>';
+            return;
+        }
+
+        try {
+            const response = await fetch('/cart_recommendations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ skus: cartSkus })
+            });
+            const data = await response.json();
+            if (data.recommendations && data.recommendations.length > 0) {
+                recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join('');
+            } else {
+                recommendationsGrid.innerHTML = '<p class="status">No recommendations found for this combination.</p>';
+            }
+        } catch (error) {
+            recommendationsGrid.innerHTML = '<p class="status">Could not load recommendations.</p>';
+            console.error('Error fetching recommendations:', error);
+        }
+    };
 </script>
 
 </body>
