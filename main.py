@@ -18,10 +18,6 @@ DETAILS_TABLE = "ProductDetails"
 def index():
     return render_template("index.html")
 
-# ==============================================================================
-# CORRECTED /products ENDPOINT - FINAL VERSION
-# Based on the user-provided schema.
-# ==============================================================================
 @app.route("/products", methods=["GET"])
 def get_all_products():
     page = request.args.get('page', 1, type=int)
@@ -32,7 +28,8 @@ def get_all_products():
         count_job = client.query(count_query)
         total_rows = list(count_job.result())[0]['total']
 
-        # CORRECTED data_query: Uses the exact column names you provided.
+        # Query based on the exact schema provided by the user.
+        # If this fails, the error log will tell us exactly which column name is wrong.
         data_query = f"""
             SELECT
               `SKU Code`         AS SKU_CODE,
@@ -55,12 +52,10 @@ def get_all_products():
         return jsonify({"products": results, "total": total_rows}), 200
         
     except Exception as e:
+        # The true error will be printed in your Cloud Run logs.
         print(f"FATAL ERROR in /products: {e}")
         return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
-# ==============================================================================
-# CORRECTED /cart_recommendations ENDPOINT - FINAL VERSION
-# ==============================================================================
 @app.route("/cart_recommendations", methods=["POST"])
 def get_cart_recommendations():
     request_json = request.get_json(silent=True)
@@ -69,14 +64,13 @@ def get_cart_recommendations():
 
     cart_skus = request_json['skus']
     
-    # CORRECTED sql_query: Fixed column names here as well.
     sql_query = f"""
         WITH
           ProductEmbeddings AS (
             SELECT feature AS SKU_CODE, (SELECT ARRAY_AGG(weight ORDER BY factor) FROM UNNEST(factor_weights)) AS embedding
             FROM ML.WEIGHTS(MODEL `{PROJECT_ID}.{DATASET_ID}.{MODEL_NAME}`)
-            -- Corrected to join on the actual model's vocabulary feature name
-            WHERE processed_input = 'SKU_CODE'
+            -- CORRECTED: The feature name the model was trained on must match exactly.
+            WHERE processed_input = 'SKU Code'
           ),
            CartAverageEmbedding AS (
             SELECT ARRAY(SELECT AVG(e) FROM UNNEST(t.embedding) AS e WITH OFFSET AS i GROUP BY i ORDER BY i) AS avg_embedding
@@ -92,6 +86,7 @@ def get_cart_recommendations():
             details.`Tags,Collective Set` AS Tags_Collective_Set,
             (1 - ML.DISTANCE(cart.avg_embedding, other_products.embedding, 'COSINE')) AS similarity_score
         FROM ProductEmbeddings AS other_products, CartAverageEmbedding AS cart
+        -- The JOIN condition must use the exact column names from each table.
         JOIN `{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}` AS details ON details.`SKU Code` = other_products.SKU_CODE
         WHERE other_products.SKU_CODE NOT IN UNNEST(@cart_skus)
         ORDER BY similarity_score DESC
