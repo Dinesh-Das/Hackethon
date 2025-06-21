@@ -17,8 +17,8 @@
         .product-card:hover { transform: translateY(-5px); }
         .product-card img { max-width: 100%; height: 120px; object-fit: contain; margin-bottom: 1rem; }
         .product-card h3 { font-size: 1rem; margin: 0.5rem 0; flex-grow: 1; }
-        .product-card p { font-size: 0.9rem; color: #6c757d; }
-        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
+        .product-card p { font-size: 0.9rem; color: #6c757d; margin: 0.25rem 0; text-align: left; padding: 0 0.5rem; }
+        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: auto; } /* Use margin-top: auto to push to bottom */
         button:disabled { background-color: #6c757d; cursor: not-allowed; }
         .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
         .pagination-container { text-align: center; margin-top: 2rem; }
@@ -86,24 +86,31 @@
         let totalProducts = 0;
         const pageSize = 10;
 
+        // MODIFIED: createProductCard function updated to display more fields
         const createProductCard = (product, isRecommendation = false) => {
             const productSku = product.SKU_CODE || product.recommended_sku_code;
             const productName = product.PRODUCT_Name;
-            const productCategory = product.CATEGORY;
-            // FIX: Directly access the 'cart' variable, which is in scope
+            const productCategory = product.CATEGORY || 'N/A';
+            const productSubCategory = product['Sub-category'] || 'N/A';
+            const productTags = product.Tags || 'N/A';
+            const productCollectiveSet = product['Collective Set'] || 'N/A';
             const isInCart = cart.some(item => item.sku === productSku);
 
             return `
             <div class="product-card" data-sku="${productSku}">
-                <img src="https://via.placeholder.com/150?text=${productCategory || 'Item'}" alt="${productName}">
+                <img src="https://via.placeholder.com/150?text=${encodeURIComponent(productCategory)}" alt="${productName}">
                 <h3>${productName}</h3>
-                <p>${productCategory || 'N/A'}</p>
+                <p><b>Category:</b> ${productCategory}</p>
+                <p><b>Sub-Category:</b> ${productSubCategory}</p>
+                <p><b>Tags:</b> ${productTags}</p>
+                <p><b>Collective Set:</b> ${productCollectiveSet}</p>
                 ${isRecommendation ? 
-                    `<p style="font-weight: bold; color: #333;">Score: ${product.similarity_score.toFixed(3)}</p>` :
+                    `<p style="font-weight: bold; color: #333; text-align: center; margin-top: 1rem;">Score: ${product.similarity_score.toFixed(3)}</p>` :
                     `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
                 }
             </div>`;
         };
+
 
         const renderCart = () => {
             if (cart.length === 0) {
@@ -119,7 +126,6 @@
         
         const updateRecommendations = async () => {
             recommendationsGrid.innerHTML = '<p class="status">Loading recommendations...</p>';
-            // FIX: Directly access the 'cart' variable, which is in scope
             const cartSkus = cart.map(i => i.sku);
 
             if (cartSkus.length === 0) {
@@ -158,7 +164,6 @@
                         loadMoreBtn.style.display = 'none';
                     }
                 } else {
-                    // This handles the case where there are no products at all
                     loadMoreBtn.style.display = 'none';
                     if(currentPage === 1) productGrid.innerHTML = '<p class="status">No products found in the database.</p>';
                 }
