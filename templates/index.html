@@ -17,8 +17,8 @@
         .product-card:hover { transform: translateY(-5px); }
         .product-card img { max-width: 100%; height: 120px; object-fit: contain; margin-bottom: 1rem; }
         .product-card h3 { font-size: 1rem; margin: 0.5rem 0; flex-grow: 1; }
-        .product-card p { font-size: 0.9rem; color: #6c757d; margin: 0.25rem 0; text-align: left; padding: 0 0.5rem; }
-        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: auto; } /* Use margin-top: auto to push to bottom */
+        .product-card p { font-size: 0.9rem; color: #6c757d; margin: 0.2rem 0;}
+        .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
         button:disabled { background-color: #6c757d; cursor: not-allowed; }
         .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
         .pagination-container { text-align: center; margin-top: 2rem; }
@@ -34,6 +34,7 @@
     </style>
 </head>
 <body>
+    <!-- CART MODAL HTML -->
     <div id="cart-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
@@ -43,6 +44,7 @@
             <div id="cart-items-container"></div>
         </div>
     </div>
+
     <header class="header">
         <h1>Cloud Shop</h1>
         <div id="cart-icon" class="cart-icon">
@@ -50,6 +52,7 @@
             <div id="cart-count" class="cart-count">0</div>
         </div>
     </header>
+
     <main>
         <section id="products-container">
             <h2 class="section-title">Products</h2>
@@ -58,6 +61,7 @@
                 <button id="load-more-btn">Load More</button>
             </div>
         </section>
+
         <section id="recommendations-container" style="margin-top: 4rem;">
             <h2 class="section-title">Because You Added Items to Your Cart...</h2>
             <div id="recommendations-grid" class="grid-container">
@@ -82,25 +86,23 @@
         let totalProducts = 0;
         const pageSize = 10;
 
-        // MODIFIED: createProductCard function updated to match the new API response
+        // MODIFIED createProductCard function to display additional details
         const createProductCard = (product, isRecommendation = false) => {
             const productSku = product.SKU_CODE || product.recommended_sku_code;
             const productName = product.PRODUCT_Name;
-            const productCategory = product.CATEGORY || 'N/A';
-            const productSubCategory = product['Sub-category'] || 'N/A';
-            // Correctly handles the single combined field
-            const productTagsAndSet = product.Tags_Collective_Set || 'N/A';
+            const productCategory = product.CATEGORY;
             const isInCart = cart.some(item => item.sku === productSku);
 
             return `
             <div class="product-card" data-sku="${productSku}">
-                <img src="https://via.placeholder.com/150?text=${encodeURIComponent(productCategory)}" alt="${productName}">
+                <img src="https://via.placeholder.com/150?text=${productCategory || 'Item'}" alt="${productName}">
                 <h3>${productName}</h3>
-                <p><b>Category:</b> ${productCategory}</p>
-                <p><b>Sub-Category:</b> ${productSubCategory}</p>
-                <p><b>Tags/Set:</b> ${productTagsAndSet}</p>
+                <p>Category: ${product.CATEGORY || 'N/A'}</p>
+                <p>Sub Category: ${product.SUB_CATEGORY || 'N/A'}</p>
+                <p>Tags: ${product.TAGS || 'N/A'}</p>
+                <p>Collective Set: ${product.COLLECTIVE_SET || 'N/A'}</p>
                 ${isRecommendation ? 
-                    `<p style="font-weight: bold; color: #333; text-align: center; margin-top: 1rem;">Score: ${product.similarity_score.toFixed(3)}</p>` :
+                    `<p style="font-weight: bold; color: #333;">Score: ${product.similarity_score.toFixed(3)}</p>` :
                     `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
                 }
             </div>`;
@@ -149,10 +151,6 @@
             loadMoreBtn.disabled = true; loadMoreBtn.innerText = 'Loading...';
             try {
                 const response = await fetch(`/products?page=${currentPage}&size=${pageSize}`);
-                // Check if the response is not OK (e.g., 500 error)
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
                 const data = await response.json();
                 if (data.products && data.products.length > 0) {
                     const productsHTML = data.products.map(p => createProductCard(p)).join('');
@@ -162,13 +160,11 @@
                         loadMoreBtn.style.display = 'none';
                     }
                 } else {
+                    // This handles the case where there are no products at all
                     loadMoreBtn.style.display = 'none';
                     if(currentPage === 1) productGrid.innerHTML = '<p class="status">No products found in the database.</p>';
                 }
-            } catch (error) { 
-                console.error('Error fetching products:', error); 
-                productGrid.innerHTML = '<p class="status">Error loading products. Check console for details.</p>';
-            }
+            } catch (error) { console.error('Error fetching products:', error); }
             finally {
                 loadMoreBtn.disabled = false; loadMoreBtn.innerText = 'Load More';
             }
