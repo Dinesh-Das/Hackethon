@@ -7,6 +7,7 @@ from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter, ArrayQue
 
 app = Flask(__name__)
 CORS(app)
+
 # Use a global client to manage connections efficiently
 try:
     client = bigquery.Client()
@@ -16,7 +17,6 @@ except Exception as e:
     # Fallback for local development without default project
     PROJECT_ID = "prj-hk25-team-3-a" 
     client = bigquery.Client(project=PROJECT_ID)
-
 
 DATASET_ID = "CleanDS"
 MODEL_NAME = "ItemEmbeddingModel"
@@ -80,7 +80,6 @@ def get_cart_recommendations():
 
     cart_skus = request_json['skus']
 
-    # Query 1: Get top 10 recommendations based on ML model embeddings
     recommendations_query = f"""
         WITH
           ProductEmbeddings AS (
@@ -129,42 +128,54 @@ def get_cart_recommendations():
         if not recommendations:
             return jsonify({"recommendations": []}), 200
 
-        # Query 2: Get details of items in the cart to determine recommendation reasons
+        # === START: MODIFIED SECTION ===
+        # Query 2: Get details of items IN THE CART, now including PRODUCT_Name
         cart_details_query = f"""
-            SELECT SKU_CODE, CATEGORY, SUB_CATEGORY, TAGS
+            SELECT SKU_CODE, PRODUCT_Name, CATEGORY, SUB_CATEGORY, TAGS
             FROM {TABLE_FQN}
             WHERE SKU_CODE IN UNNEST(@cart_skus)
         """
         cart_details_job = client.query(cart_details_query, job_config=job_config)
         cart_items_details = [dict(row) for row in cart_details_job.result()]
         
-        # Determine the reason for each recommendation
+        # Determine the reason for each recommendation with specific product context
         for rec_product in recommendations:
-            reason = "Recommended for you based on similar item styles."
-            rec_product['recommendation_reason'] = reason # Set a fallback
+            # Set a fallback reason in case no specific match is found
+            reason = "Based on the styles in your cart."
+            rec_product['recommendation_reason'] = reason
 
+            reason_found = False
             # Priority 1: Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('CATEGORY') and rec_product.get('CATEGORY') == cart_item.get('CATEGORY'):
-                    rec_product['recommendation_reason'] = f"Because you like the '{cart_item['CATEGORY']}' category."
+                    rec_product['recommendation_reason'] = f"Similar category to '{cart_item['PRODUCT_Name']}' in your cart."
+                    reason_found = True
                     break
-            else: # Only if no category match was found
-                # Priority 2: Sub-Category Match
+            
+            if reason_found: continue
+
+            # Priority 2: Sub-Category Match
+            for cart_item in cart_items_details:
+                if cart_item.get('SUB_CATEGORY') and rec_product.get('SUB_CATEGORY') == cart_item.get('SUB_CATEGORY'):
+                    rec_product['recommendation_reason'] = f"Similar sub-category to '{cart_item['PRODUCT_Name']}'."
+                    reason_found = True
+                    break
+
+            if reason_found: continue
+
+            # Priority 3: Tag Match
+            rec_tags = set(str(rec_product.get('TAGS', '') or '').replace(" ", "").split(','))
+            rec_tags.discard('') # Remove empty strings if they exist
+            if rec_tags:
                 for cart_item in cart_items_details:
-                    if cart_item.get('SUB_CATEGORY') and rec_product.get('SUB_CATEGORY') == cart_item.get('SUB_CATEGORY'):
-                        rec_product['recommendation_reason'] = f"Because you like items in the '{cart_item['SUB_CATEGORY']}' sub-category."
+                    cart_tags = set(str(cart_item.get('TAGS', '') or '').replace(" ", "").split(','))
+                    shared_tags = rec_tags.intersection(cart_tags)
+                    if shared_tags:
+                        tag_example = next(iter(shared_tags))
+                        rec_product['recommendation_reason'] = f"Shares tags like '{tag_example}' with '{cart_item['PRODUCT_Name']}'."
+                        reason_found = True
                         break
-                else: # Only if no sub-category match was found
-                    # Priority 3: Tag Match
-                    rec_tags = set(str(rec_product.get('TAGS', '') or '').replace(" ", "").split(','))
-                    rec_tags.discard('')
-                    if rec_tags:
-                        for cart_item in cart_items_details:
-                            cart_tags = set(str(cart_item.get('TAGS', '') or '').replace(" ", "").split(','))
-                            shared_tags = rec_tags.intersection(cart_tags)
-                            if shared_tags:
-                                rec_product['recommendation_reason'] = f"Shares tags like '{next(iter(shared_tags))}' with items in your cart."
-                                break
+        # === END: MODIFIED SECTION ===
 
         return jsonify({"recommendations": recommendations}), 200
 
