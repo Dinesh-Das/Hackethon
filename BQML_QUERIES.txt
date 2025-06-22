@@ -1,0 +1,107 @@
+-- Create a table of product-feature interactions using the native SKU_CODE
+CREATE OR REPLACE TABLE `prj-hk25-team-3-a.CleanDS.ProductFeatureInteractions` AS (
+  -- Simple categorical features get a weight of 1.0
+  SELECT SKU_CODE, 'CAT_' || CATEGORY AS feature, 1.0 AS weight FROM `prj-hk25-team-3-a.CleanDS.ProductDetails` WHERE CATEGORY IS NOT NULL
+  UNION ALL
+  SELECT SKU_CODE, 'SUB_' || SUB_CATEGORY AS feature, 1.0 AS weight FROM `prj-hk25-team-3-a.CleanDS.ProductDetails` WHERE SUB_CATEGORY IS NOT NULL
+  UNION ALL
+  SELECT SKU_CODE, 'CLR_' || COLOUR AS feature, 1.0 AS weight FROM `prj-hk25-team-3-a.CleanDS.ProductDetails` WHERE COLOUR IS NOT NULL
+  UNION ALL
+  -- Give tags and collective sets a higher weight as they are more specific
+  SELECT SKU_CODE, tag AS feature, 1.5 AS weight
+  FROM `prj-hk25-team-3-a.CleanDS.ProductDetails`, UNNEST(JSON_EXTRACT_STRING_ARRAY(TAGS)) AS tag
+  UNION ALL
+  SELECT SKU_CODE, cs AS feature, 1.5 AS weight
+  FROM `prj-hk25-team-3-a.CleanDS.ProductDetails`, UNNEST(JSON_EXTRACT_STRING_ARRAY(COLLECTIVE_SET)) AS cs
+);
+
+
+--Model Creation
+CREATE OR REPLACE MODEL `prj-hk25-team-3-a.CleanDS.ItemEmbeddingModel`
+OPTIONS(
+  model_type='matrix_factorization',
+  user_col='SKU_CODE',   
+  item_col='feature',
+  rating_col='weight',
+  feedback_type='implicit'
+) AS
+SELECT * FROM `prj-hk25-team-3-a.CleanDS.ProductFeatureInteractions`;
+
+
+--Recommendations 
+-- Set the target SKU for recommendations
+DECLARE target_sku_code STRING DEFAULT 'SKU0011';
+
+-- Main recommendation query
+WITH ProductEmbeddings AS (
+  SELECT
+    -- 1. The actual SKU codes are in the 'feature' column. Alias it for clarity.
+    feature AS SKU_CODE,
+    -- 2. Reconstruct the embedding vector from the 'factor_weights' struct.
+    (SELECT ARRAY_AGG(weight ORDER BY factor) FROM UNNEST(factor_weights)) AS embedding
+  FROM
+    ML.WEIGHTS(MODEL `prj-hk25-team-3-a.CleanDS.ItemEmbeddingModel`)
+  WHERE
+    -- This filter correctly selects the weights for the products (users).
+    processed_input = 'SKU_CODE'
+)
+SELECT
+  other_products.SKU_CODE AS recommended_sku_code,
+  -- The rest of the query works correctly with the fixed CTE.
+  (1 - ML.DISTANCE(target_product.embedding, other_products.embedding, 'COSINE')) AS similarity_score
+FROM
+  ProductEmbeddings AS target_product,
+  ProductEmbeddings AS other_products
+WHERE
+  target_product.SKU_CODE = target_sku_code
+  AND target_product.SKU_CODE != other_products.SKU_CODE
+ORDER BY
+  similarity_score DESC
+LIMIT 10;
+
+--Utilization
+-- This query will be run by our Cloud Function
+-- It accepts a parameter @target_sku for the SKU to get recommendations for
+
+WITH ProductEmbeddings AS (
+  SELECT
+    feature AS SKU_CODE,
+    (SELECT ARRAY_AGG(weight ORDER BY factor) FROM UNNEST(factor_weights)) AS embedding
+  FROM
+    ML.WEIGHTS(MODEL `prj-hk25-team-3-a.CleanDS.ItemEmbeddingModel`)
+  WHERE
+    processed_input = 'SKU_CODE'
+),
+Recommendations AS (
+  SELECT
+    other_products.SKU_CODE AS recommended_sku_code,
+    (1 - ML.DISTANCE(target_product.embedding, other_products.embedding, 'COSINE')) AS similarity_score
+  FROM
+    ProductEmbeddings AS target_product,
+    ProductEmbeddings AS other_products
+  WHERE
+    -- Use a parameter for security and flexibility
+    target_product.SKU_CODE = @target_sku
+    AND target_product.SKU_CODE != other_products.SKU_CODE
+  ORDER BY
+    similarity_score DESC
+  LIMIT 10
+)
+-- Final SELECT: Join the recommendation results with the product details table
+-- to get full information for the frontend.
+SELECT
+  rec.recommended_sku_code,
+  rec.similarity_score,
+  details.PRODUCT_Name,
+  details.CATEGORY,
+  details.SUB_CATEGORY,
+  details.COLOUR
+  -- Add any other details you want to show in the UI
+FROM
+  Recommendations AS rec
+JOIN
+  `prj-hk25-team-3-a.CleanDS.ProductDetails` AS details
+ON
+  rec.recommended_sku_code = details.SKU_CODE
+ORDER BY
+  rec.similarity_score DESC;
