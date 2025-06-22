@@ -71,8 +71,7 @@ def get_all_products():
 def get_cart_recommendations():
     """
     API endpoint to get recommendations based on a list of SKUs in the cart.
-    It averages the embeddings of cart items to find similar products and
-    then determines a human-readable reason for the recommendation.
+    It now identifies the source product and the reason for the recommendation separately.
     """
     request_json = request.get_json(silent=True)
     if not request_json or 'skus' not in request_json or not request_json['skus']:
@@ -128,8 +127,7 @@ def get_cart_recommendations():
         if not recommendations:
             return jsonify({"recommendations": []}), 200
 
-        # === START: MODIFIED SECTION ===
-        # Query 2: Get details of items IN THE CART, now including PRODUCT_Name
+        # Query 2: Get details of items in the cart
         cart_details_query = f"""
             SELECT SKU_CODE, PRODUCT_Name, CATEGORY, SUB_CATEGORY, TAGS
             FROM {TABLE_FQN}
@@ -138,17 +136,19 @@ def get_cart_recommendations():
         cart_details_job = client.query(cart_details_query, job_config=job_config)
         cart_items_details = [dict(row) for row in cart_details_job.result()]
         
-        # Determine the reason for each recommendation with specific product context
+        # === START: MODIFIED SECTION ===
+        # Determine the reason and source product for each recommendation
         for rec_product in recommendations:
-            # Set a fallback reason in case no specific match is found
-            reason = "Based on the styles in your cart."
-            rec_product['recommendation_reason'] = reason
+            # Initialize with fallback values
+            rec_product['recommendation_reason'] = "Similar Style"
+            rec_product['recommended_from_product_name'] = "" # Will be empty if no specific product match
 
             reason_found = False
             # Priority 1: Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('CATEGORY') and rec_product.get('CATEGORY') == cart_item.get('CATEGORY'):
-                    rec_product['recommendation_reason'] = f"Similar category to '{cart_item['PRODUCT_Name']}' in your cart."
+                    rec_product['recommendation_reason'] = "Shared Category"
+                    rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                     reason_found = True
                     break
             
@@ -157,7 +157,8 @@ def get_cart_recommendations():
             # Priority 2: Sub-Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('SUB_CATEGORY') and rec_product.get('SUB_CATEGORY') == cart_item.get('SUB_CATEGORY'):
-                    rec_product['recommendation_reason'] = f"Similar sub-category to '{cart_item['PRODUCT_Name']}'."
+                    rec_product['recommendation_reason'] = "Shared Sub-Category"
+                    rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                     reason_found = True
                     break
 
@@ -165,14 +166,14 @@ def get_cart_recommendations():
 
             # Priority 3: Tag Match
             rec_tags = set(str(rec_product.get('TAGS', '') or '').replace(" ", "").split(','))
-            rec_tags.discard('') # Remove empty strings if they exist
+            rec_tags.discard('')
             if rec_tags:
                 for cart_item in cart_items_details:
                     cart_tags = set(str(cart_item.get('TAGS', '') or '').replace(" ", "").split(','))
                     shared_tags = rec_tags.intersection(cart_tags)
                     if shared_tags:
-                        tag_example = next(iter(shared_tags))
-                        rec_product['recommendation_reason'] = f"Shares tags like '{tag_example}' with '{cart_item['PRODUCT_Name']}'."
+                        rec_product['recommendation_reason'] = "Shared Tags"
+                        rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                         reason_found = True
                         break
         # === END: MODIFIED SECTION ===
