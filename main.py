@@ -30,6 +30,31 @@ def index():
     """Renders the main HTML page."""
     return render_template("index.html")
 
+# === START: NEW ENDPOINT FOR MODEL EVALUATION ===
+@app.route("/model_evaluation", methods=["GET"])
+def get_model_evaluation():
+    """
+    Evaluates the recommendation model and returns its performance metrics.
+    For Matrix Factorization, a key metric is Mean Squared Error (MSE), where lower is better.
+    """
+    eval_query = f"SELECT * FROM ML.EVALUATE(MODEL {MODEL_FQN})"
+    
+    try:
+        query_job = client.query(eval_query)
+        # ML.EVALUATE returns one row of metrics
+        results = [dict(row) for row in query_job.result()]
+        
+        if not results:
+            return jsonify({"error": "Model evaluation returned no results."}), 404
+            
+        # Return the first row of metrics
+        return jsonify(results[0]), 200
+
+    except Exception as e:
+        print(f"An error occurred during model evaluation: {e}")
+        return jsonify({"error": f"An internal server error occurred: {e}"}), 500
+# === END: NEW ENDPOINT ===
+
 
 @app.route("/products", methods=["GET"])
 def get_all_products():
@@ -135,17 +160,13 @@ def get_cart_recommendations():
         cart_details_job = client.query(cart_details_query, job_config=job_config)
         cart_items_details = [dict(row) for row in cart_details_job.result()]
         
-        # === START: MODIFIED SECTION ===
-        # Determine the specific reason and source product for each recommendation
         for rec_product in recommendations:
             rec_product['recommendation_reason'] = "Similar Style"
             rec_product['recommended_from_product_name'] = ""
 
             reason_found = False
-            # Priority 1: Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('CATEGORY') and rec_product.get('CATEGORY') == cart_item.get('CATEGORY'):
-                    # Make reason specific
                     rec_product['recommendation_reason'] = f"Shared Category: '{rec_product.get('CATEGORY')}'"
                     rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                     reason_found = True
@@ -153,10 +174,8 @@ def get_cart_recommendations():
             
             if reason_found: continue
 
-            # Priority 2: Sub-Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('SUB_CATEGORY') and rec_product.get('SUB_CATEGORY') == cart_item.get('SUB_CATEGORY'):
-                    # Make reason specific
                     rec_product['recommendation_reason'] = f"Shared Sub-Category: '{rec_product.get('SUB_CATEGORY')}'"
                     rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                     reason_found = True
@@ -164,7 +183,6 @@ def get_cart_recommendations():
 
             if reason_found: continue
 
-            # Priority 3: Tag Match
             rec_tags = set(str(rec_product.get('TAGS', '') or '').replace(" ", "").split(','))
             rec_tags.discard('')
             if rec_tags:
@@ -172,15 +190,12 @@ def get_cart_recommendations():
                     cart_tags = set(str(cart_item.get('TAGS', '') or '').replace(" ", "").split(','))
                     shared_tags = rec_tags.intersection(cart_tags)
                     if shared_tags:
-                        # Extract the first shared tag to show as an example
                         tag_example = next(iter(shared_tags)).strip().title()
-                        # Make reason specific
                         rec_product['recommendation_reason'] = f"Shares Tag: '{tag_example}'"
                         rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                         reason_found = True
                         break
-        # === END: MODIFIED SECTION ===
-
+        
         return jsonify({"recommendations": recommendations}), 200
 
     except Exception as e:
