@@ -1,132 +1,177 @@
-import pandas as pd
+# main.py
+import os
 from flask import Flask, request, jsonify, render_template
-from collections import defaultdict
+from flask_cors import CORS
+from google.cloud import bigquery
+from google.cloud.bigquery import QueryJobConfig, ScalarQueryParameter, ArrayQueryParameter
 
 app = Flask(__name__)
-
-# Load and preprocess the dataset
+CORS(app)
+# Use a global client to manage connections efficiently
 try:
-    products_df = pd.read_csv('products.csv', encoding='utf-8')
-except UnicodeDecodeError:
-    products_df = pd.read_csv('products.csv', encoding='latin1')
+    client = bigquery.Client()
+    PROJECT_ID = os.environ.get("GCP_PROJECT", client.project)
+except Exception as e:
+    print(f"Could not initialize BigQuery Client. Ensure you have authenticated. Error: {e}")
+    # Fallback for local development without default project
+    PROJECT_ID = "prj-hk25-team-3-a" 
+    client = bigquery.Client(project=PROJECT_ID)
 
-# Fill NaN values to prevent errors during string operations
-products_df.fillna('', inplace=True)
 
-@app.route('/')
+DATASET_ID = "CleanDS"
+MODEL_NAME = "ItemEmbeddingModel"
+DETAILS_TABLE = "ProductDetails"
+TABLE_FQN = f"`{PROJECT_ID}.{DATASET_ID}.{DETAILS_TABLE}`"
+MODEL_FQN = f"`{PROJECT_ID}.{DATASET_ID}.{MODEL_NAME}`"
+
+
+@app.route("/")
 def index():
-    """Render the main page."""
-    products = products_df.to_dict(orient='records')
-    return render_template('index.html', products=products)
+    """Renders the main HTML page."""
+    return render_template("index.html")
 
-@app.route('/cart_recommendations', methods=['POST'])
+
+@app.route("/products", methods=["GET"])
+def get_all_products():
+    """Fetches a paginated list of all products available in the recommendation model."""
+    page = request.args.get('page', 1, type=int)
+    size = request.args.get('size', 10, type=int)
+    offset = (page - 1) * size
+    try:
+        count_query = f"SELECT COUNT(*) as total FROM {TABLE_FQN}"
+        count_job = client.query(count_query)
+        total_rows = list(count_job.result())[0]['total']
+
+        data_query = f"""
+            WITH ModelSKUs AS (
+              SELECT feature AS SKU_CODE
+              FROM ML.WEIGHTS(MODEL {MODEL_FQN})
+              WHERE processed_input = 'SKU_CODE'
+            )
+            SELECT
+              details.SKU_CODE, details.PRODUCT_Name, details.CATEGORY, details.SUB_CATEGORY, details.TAGS, details.COLLECTIVE_SET
+            FROM {TABLE_FQN} AS details
+            INNER JOIN ModelSKUs ON details.SKU_CODE = ModelSKUs.SKU_CODE
+            ORDER BY details.SKU_CODE
+            LIMIT @size OFFSET @offset;
+        """
+        job_config = QueryJobConfig(query_parameters=[
+            ScalarQueryParameter("size", "INT64", size),
+            ScalarQueryParameter("offset", "INT64", offset),
+        ])
+        query_job = client.query(data_query, job_config=job_config)
+        results = [dict(row) for row in query_job.result()]
+        return jsonify({"products": results, "total": total_rows}), 200
+    except Exception as e:
+        print(f"Error fetching products: {e}")
+        return jsonify({"error": f"An internal server error occurred: {e}"}), 500
+
+
+@app.route("/cart_recommendations", methods=["POST"])
 def get_cart_recommendations():
-    """Generate recommendations based on items in the cart."""
-    cart_data = request.json
-    cart_skus = [item['sku'] for item in cart_data]
-    
-    if not cart_skus:
-        return jsonify([])
+    """
+    API endpoint to get recommendations based on a list of SKUs in the cart.
+    It averages the embeddings of cart items to find similar products and
+    then determines a human-readable reason for the recommendation.
+    """
+    request_json = request.get_json(silent=True)
+    if not request_json or 'skus' not in request_json or not request_json['skus']:
+        return jsonify({"recommendations": []})
 
-    cart_products = products_df[products_df['SKU_CODE'].isin(cart_skus)]
-    if cart_products.empty:
-        return jsonify([])
+    cart_skus = request_json['skus']
 
-    # Use defaultdict to handle scores for products not yet in the dict
-    similarity_scores = defaultdict(lambda: {'score': 0, 'reasons': set()})
-
-    # --- Scoring Logic ---
-    # Iterate through each item in the cart to find similar products
-    for index, cart_product in cart_products.iterrows():
-        cart_tags = set(str(cart_product.get('TAGS', '')).split(', '))
-
-        # Iterate through all products in the dataset to compare
-        for idx, p in products_df.iterrows():
-            # Skip items already in the cart
-            if p['SKU_CODE'] in cart_skus:
-                continue
-
-            score = 0
-            # 1. Compare CATEGORY (highest weight)
-            if p['CATEGORY'] and p['CATEGORY'] == cart_product['CATEGORY']:
-                score += 3
-            
-            # 2. Compare SUB_CATEGORY (medium weight)
-            if p['SUB_CATEGORY'] and p['SUB_CATEGORY'] == cart_product['SUB_CATEGORY']:
-                score += 2
-            
-            # 3. Compare TAGS (lower weight)
-            product_tags = set(str(p.get('TAGS', '')).split(', '))
-            shared_tags_count = len(cart_tags.intersection(product_tags))
-            score += shared_tags_count
-
-            if score > 0:
-                similarity_scores[p['SKU_CODE']]['score'] += score
-
-    # Sort recommendations by score
-    sorted_recommendations = sorted(
-        similarity_scores.items(), key=lambda item: item[1]['score'], reverse=True
+    # Query 1: Get top 10 recommendations based on ML model embeddings
+    recommendations_query = f"""
+        WITH
+          ProductEmbeddings AS (
+            SELECT feature AS SKU_CODE, (SELECT ARRAY_AGG(weight) FROM UNNEST(factor_weights)) AS embedding
+            FROM ML.WEIGHTS(MODEL {MODEL_FQN})
+            WHERE processed_input = 'SKU_CODE'
+          ),
+          CartAverageEmbedding AS (
+            SELECT
+              ARRAY(
+                SELECT AVG(e)
+                FROM UNNEST(t.embedding) AS e WITH OFFSET AS i
+                GROUP BY i ORDER BY i
+              ) AS avg_embedding
+            FROM ProductEmbeddings t
+            WHERE t.SKU_CODE IN UNNEST(@cart_skus)
+          )
+        SELECT
+            other_products.SKU_CODE as recommended_sku_code,
+            details.PRODUCT_Name,
+            details.CATEGORY,
+            details.SUB_CATEGORY,
+            details.TAGS,
+            details.COLLECTIVE_SET,
+            (1 - ML.DISTANCE(cart.avg_embedding, other_products.embedding, 'COSINE')) AS similarity_score
+        FROM
+            ProductEmbeddings AS other_products,
+            CartAverageEmbedding AS cart
+        JOIN
+            {TABLE_FQN} AS details
+            ON details.SKU_CODE = other_products.SKU_CODE
+        WHERE
+            other_products.SKU_CODE NOT IN UNNEST(@cart_skus)
+        ORDER BY
+            similarity_score DESC
+        LIMIT 10;
+        """
+    job_config = QueryJobConfig(
+        query_parameters=[ArrayQueryParameter("cart_skus", "STRING", cart_skus)]
     )
-    
-    # Get top N recommendations (e.g., top 10)
-    N = 10
-    top_n_recommendations = []
-    cart_products_list = cart_products.to_dict(orient='records')
 
-    for sku, data in sorted_recommendations:
-        if len(top_n_recommendations) >= N:
-            break
+    try:
+        rec_job = client.query(recommendations_query, job_config=job_config)
+        recommendations = [dict(row) for row in rec_job.result()]
 
-        recommended_product_info = products_df[products_df['SKU_CODE'] == sku].iloc[0].to_dict()
+        if not recommendations:
+            return jsonify({"recommendations": []}), 200
+
+        # Query 2: Get details of items in the cart to determine recommendation reasons
+        cart_details_query = f"""
+            SELECT SKU_CODE, CATEGORY, SUB_CATEGORY, TAGS
+            FROM {TABLE_FQN}
+            WHERE SKU_CODE IN UNNEST(@cart_skus)
+        """
+        cart_details_job = client.query(cart_details_query, job_config=job_config)
+        cart_items_details = [dict(row) for row in cart_details_job.result()]
         
-        # === START: New Logic for Recommendation Reason ===
-        reason = "Based on items in your cart." # Fallback reason
-        matched_category = False
-        matched_sub_category = False
-        
-        # Priority 1: Check for Category match
-        for cart_item in cart_products_list:
-            if recommended_product_info['CATEGORY'] and recommended_product_info['CATEGORY'] == cart_item['CATEGORY']:
-                reason = f"Because you like the '{cart_item['CATEGORY']}' category."
-                matched_category = True
-                break
-        
-        # Priority 2: Check for Sub-Category match
-        if not matched_category:
-            for cart_item in cart_products_list:
-                if recommended_product_info['SUB_CATEGORY'] and recommended_product_info['SUB_CATEGORY'] == cart_item['SUB_CATEGORY']:
-                    reason = f"Because you like the '{cart_item['SUB_CATEGORY']}' sub-category."
-                    matched_sub_category = True
+        # Determine the reason for each recommendation
+        for rec_product in recommendations:
+            reason = "Recommended for you based on similar item styles."
+            rec_product['recommendation_reason'] = reason # Set a fallback
+
+            # Priority 1: Category Match
+            for cart_item in cart_items_details:
+                if cart_item.get('CATEGORY') and rec_product.get('CATEGORY') == cart_item.get('CATEGORY'):
+                    rec_product['recommendation_reason'] = f"Because you like the '{cart_item['CATEGORY']}' category."
                     break
+            else: # Only if no category match was found
+                # Priority 2: Sub-Category Match
+                for cart_item in cart_items_details:
+                    if cart_item.get('SUB_CATEGORY') and rec_product.get('SUB_CATEGORY') == cart_item.get('SUB_CATEGORY'):
+                        rec_product['recommendation_reason'] = f"Because you like items in the '{cart_item['SUB_CATEGORY']}' sub-category."
+                        break
+                else: # Only if no sub-category match was found
+                    # Priority 3: Tag Match
+                    rec_tags = set(str(rec_product.get('TAGS', '') or '').replace(" ", "").split(','))
+                    rec_tags.discard('')
+                    if rec_tags:
+                        for cart_item in cart_items_details:
+                            cart_tags = set(str(cart_item.get('TAGS', '') or '').replace(" ", "").split(','))
+                            shared_tags = rec_tags.intersection(cart_tags)
+                            if shared_tags:
+                                rec_product['recommendation_reason'] = f"Shares tags like '{next(iter(shared_tags))}' with items in your cart."
+                                break
 
-        # Priority 3: Check for shared tags
-        if not matched_category and not matched_sub_category:
-            recommended_tags = set(str(recommended_product_info.get('TAGS', '')).split(', '))
-            cart_tags = set()
-            for item in cart_products_list:
-                cart_tags.update(str(item.get('TAGS', '')).split(', '))
-            
-            # Remove empty strings that might result from splitting
-            recommended_tags.discard('')
-            cart_tags.discard('')
+        return jsonify({"recommendations": recommendations}), 200
 
-            shared_tags = recommended_tags.intersection(cart_tags)
-            if shared_tags:
-                reason = f"Shares tags like '{next(iter(shared_tags))}' with items in your cart."
-        # === END: New Logic for Recommendation Reason ===
+    except Exception as e:
+        print(f"An error occurred during recommendation: {e}")
+        return jsonify({"error": f"An internal server error occurred: {e}"}), 500
 
-        top_n_recommendations.append({
-            "recommended_sku_code": sku,
-            "PRODUCT_Name": recommended_product_info["PRODUCT_Name"],
-            "CATEGORY": recommended_product_info["CATEGORY"],
-            "SUB_CATEGORY": recommended_product_info["SUB_CATEGORY"],
-            "TAGS": recommended_product_info["TAGS"],
-            "COLLECTIVE_SET": recommended_product_info["COLLECTIVE_SET"],
-            "similarity_score": data['score'],
-            "recommendation_reason": reason  # Add the new field
-        })
-        
-    return jsonify(top_n_recommendations)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
