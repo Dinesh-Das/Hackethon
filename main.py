@@ -71,7 +71,7 @@ def get_all_products():
 def get_cart_recommendations():
     """
     API endpoint to get recommendations based on a list of SKUs in the cart.
-    It now identifies the source product and the reason for the recommendation separately.
+    It now identifies the source product and the *specific* reason for the recommendation.
     """
     request_json = request.get_json(silent=True)
     if not request_json or 'skus' not in request_json or not request_json['skus']:
@@ -127,7 +127,6 @@ def get_cart_recommendations():
         if not recommendations:
             return jsonify({"recommendations": []}), 200
 
-        # Query 2: Get details of items in the cart
         cart_details_query = f"""
             SELECT SKU_CODE, PRODUCT_Name, CATEGORY, SUB_CATEGORY, TAGS
             FROM {TABLE_FQN}
@@ -137,17 +136,17 @@ def get_cart_recommendations():
         cart_items_details = [dict(row) for row in cart_details_job.result()]
         
         # === START: MODIFIED SECTION ===
-        # Determine the reason and source product for each recommendation
+        # Determine the specific reason and source product for each recommendation
         for rec_product in recommendations:
-            # Initialize with fallback values
             rec_product['recommendation_reason'] = "Similar Style"
-            rec_product['recommended_from_product_name'] = "" # Will be empty if no specific product match
+            rec_product['recommended_from_product_name'] = ""
 
             reason_found = False
             # Priority 1: Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('CATEGORY') and rec_product.get('CATEGORY') == cart_item.get('CATEGORY'):
-                    rec_product['recommendation_reason'] = "Shared Category"
+                    # Make reason specific
+                    rec_product['recommendation_reason'] = f"Shared Category: '{rec_product.get('CATEGORY')}'"
                     rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                     reason_found = True
                     break
@@ -157,7 +156,8 @@ def get_cart_recommendations():
             # Priority 2: Sub-Category Match
             for cart_item in cart_items_details:
                 if cart_item.get('SUB_CATEGORY') and rec_product.get('SUB_CATEGORY') == cart_item.get('SUB_CATEGORY'):
-                    rec_product['recommendation_reason'] = "Shared Sub-Category"
+                    # Make reason specific
+                    rec_product['recommendation_reason'] = f"Shared Sub-Category: '{rec_product.get('SUB_CATEGORY')}'"
                     rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                     reason_found = True
                     break
@@ -172,7 +172,10 @@ def get_cart_recommendations():
                     cart_tags = set(str(cart_item.get('TAGS', '') or '').replace(" ", "").split(','))
                     shared_tags = rec_tags.intersection(cart_tags)
                     if shared_tags:
-                        rec_product['recommendation_reason'] = "Shared Tags"
+                        # Extract the first shared tag to show as an example
+                        tag_example = next(iter(shared_tags)).strip().title()
+                        # Make reason specific
+                        rec_product['recommendation_reason'] = f"Shares Tag: '{tag_example}'"
                         rec_product['recommended_from_product_name'] = cart_item['PRODUCT_Name']
                         reason_found = True
                         break
