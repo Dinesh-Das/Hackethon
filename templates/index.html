@@ -4,26 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloud Recommender Shop</title>
+    <!-- 1. ADD CHART.JS SCRIPT -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --primary-color: #007bff; --light-gray: #f8f9fa; --border-color: #dee2e6; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: var(--light-gray); }
         .header { background: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
         .header h1 { margin: 0; font-size: 1.5rem; }
-        .cart-icon { position: relative; cursor: pointer; }
-        .cart-count { position: absolute; top: -10px; right: -10px; background-color: var(--primary-color); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; }
         main { padding: 2rem; }
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }
         .product-card { background: white; border: 1px solid var(--border-color); border-radius: 8px; text-align: center; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.2s; display: flex; flex-direction: column; }
         .product-card:hover { transform: translateY(-5px); }
+        .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
+        .status { text-align: center; color: #6c757d; font-size: 1.2rem; padding: 2rem; }
+        
+        /* Style for Recommendation Explanations */
+        .recommendation-details {
+            font-size: 0.9em; text-align: left; background-color: #f0f8ff; border-left: 4px solid var(--primary-color); padding: 8px; margin-top: 12px; border-radius: 4px;
+        }
+        .recommendation-details p { margin: 4px 0; color: #333; }
+
+        /* Other styles for buttons, cart, etc. remain the same */
+        .cart-icon { position: relative; cursor: pointer; }
+        .cart-count { position: absolute; top: -10px; right: -10px; background-color: var(--primary-color); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; }
         .product-card img { max-width: 100%; height: 120px; object-fit: contain; margin-bottom: 1rem; }
         .product-card h3 { font-size: 1rem; margin: 0.5rem 0; flex-grow: 1; }
         .product-card p { font-size: 0.9rem; color: #6c757d; margin: 0.2rem 0;}
         .product-card button { background-color: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
         button:disabled { background-color: #6c757d; cursor: not-allowed; }
-        .section-title { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; }
         .pagination-container { text-align: center; margin-top: 2rem; }
-        .status { text-align: center; color: #6c757d; font-size: 1.2rem; padding: 2rem; }
-        /* Cart Modal Styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
         .modal-content { background: white; padding: 2rem; border-radius: 8px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
@@ -31,64 +40,29 @@
         .close-btn { font-size: 1.5rem; border: none; background: none; cursor: pointer; }
         .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--light-gray); }
         .cart-item-remove-btn { color: red; cursor: pointer; border: none; background: none; font-size: 1rem; }
-        
-        /* Style for Recommendation Explanations */
-        .recommendation-details {
-            font-size: 0.9em;
-            text-align: left;
-            background-color: #f0f8ff; /* AliceBlue */
-            border-left: 4px solid var(--primary-color);
-            padding: 8px;
-            margin-top: 12px;
-            border-radius: 4px;
-        }
-        .recommendation-details p {
-            margin: 4px 0; /* Spacing between lines */
-            color: #333;
-        }
     </style>
 </head>
 <body>
-    <!-- CART MODAL HTML -->
-    <div id="cart-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Your Cart</h2>
-                <button id="close-cart-btn" class="close-btn">&times;</button>
-            </div>
-            <div id="cart-items-container"></div>
-        </div>
-    </div>
-
-    <header class="header">
-        <h1>Cloud Shop</h1>
-        <div id="cart-icon" class="cart-icon">
-            <span>🛒</span>
-            <div id="cart-count" class="cart-count">0</div>
-        </div>
-    </header>
+    <!-- HEADER AND CART MODAL (No Changes) -->
+    <header class="header">...</header>
+    <div id="cart-modal" class="modal-overlay">...</div>
 
     <main>
-        <section id="products-container">
-            <h2 class="section-title">Products</h2>
-            <div id="product-grid" class="grid-container"></div>
-            <div class="pagination-container">
-                <button id="load-more-btn">Load More</button>
+        <!-- 2. ADD NEW HTML SECTION FOR THE GRAPH -->
+        <section id="model-evaluation-container" style="margin-bottom: 4rem;">
+            <h2 class="section-title">Model Performance</h2>
+            <div style="width: 100%; max-width: 600px; margin: auto; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <canvas id="evaluationChart"></canvas>
             </div>
         </section>
 
-        <section id="recommendations-container" style="margin-top: 4rem;">
-            <h2 class="section-title">Because You Added Items to Your Cart...</h2>
-            <div id="recommendations-grid" class="grid-container">
-                <p class="status">Add items to your cart to see recommendations!</p>
-            </div>
-        </section>
+        <section id="products-container">...</section>
+        <section id="recommendations-container" style="margin-top: 4rem;">...</section>
     </main>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // === START: CORRECTED SECTION ===
-        // These declarations were missing, causing the error. They are now restored.
+        // Variable declarations remain the same
         const productGrid = document.getElementById('product-grid');
         const recommendationsGrid = document.getElementById('recommendations-grid');
         const cartCountElement = document.getElementById('cart-count');
@@ -97,48 +71,87 @@
         const closeCartBtn = document.getElementById('close-cart-btn');
         const cartIcon = document.getElementById('cart-icon');
         const cartItemsContainer = document.getElementById('cart-items-container');
-        // === END: CORRECTED SECTION ===
 
+        // All other variables and functions (createProductCard, renderCart, etc.) remain the same
         let cart = [];
         let currentPage = 1;
         let totalProducts = 0;
         const pageSize = 10;
-
-        const createProductCard = (product, isRecommendation = false) => {
-            const productSku = product.SKU_CODE || product.recommended_sku_code;
-            const productName = product.PRODUCT_Name;
-            const isInCart = cart.some(item => item.sku === productSku);
-
-            return `
-            <div class="product-card" data-sku="${productSku}">
-                 <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5OjcBCgoKDQwNGg8PGjclHyU3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3N//AABEIAJQA2QMBIgACEQEDEQH/xAAbAAADAAMBAQAAAAAAAAAAAAAAAQIDBQYEB//EAEQQAAICAgADAgkJBQUJAQAAAAABAgMEEQUSIQYxExUWIkFRVZOxFDQ2VGFxcpGyMmJzgZQzNXSh8CRCQ1KSosHC0SP/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/APraRSQJFpFQJFJDSKSIo0NIaRWgFoaGAAGhpDSAWg0VoAFoNIYwJ0LRYgJ0IvQmgJForQgJ0ToyCAxtE6MjQmgMTRDRlaJaAwtEmVoWiotItISRaRFCRSQJFaANDAaQBopIEMAAx331Y1M7siyNdUFuU5vSRr/KPgntXD98gNoBrPKPgntXD96g8o+Ce1cP3qA2YGs8o+Ce1cP3qDyj4J7Vw/eoDZgazyj4J7Vw/eoPKPgntXD96gNmBrPKPgntXD96heUfBNb8a4fvkBtCdGPEy8bNp8NiX13Vba565bW0ZgI0xMsTQENEtFsTQGNoloyNEtAYmhaLaFoC0UhIpIBpFaEhoB6KXQSKAAAYGl7ZfRjP/Av1I9ODwzBlh0N4dDbqj31r1Hm7ZfRjP/Av1I2mB8xx/wCFH4IDH4rwPqWP7tB4swPqWP7tHrADyeLMD6lj+7QeLMD6lj+7R6wA8nizA+pY/u0HizA+pY/u0VxHLWFiTvceZrpGPrb7ka63L4rh1LKyo0TpWnZCCalBMD3+K8D6lj+7QvFfD9/Msf3aPXCSnFSj1i1tfcP0gc52ISXDMpRSSWbakl96OiOc7GSjDhWZOUkorNubb6JdUenhXGLuLZ9ssSlLhle4K+W92z/d+zvA3IAAEMTKaEBLJZbJYGNonRbEBSKRJaAY0hIqIDGCABgAwNL2y+jGf+BfqRs8D5jj/wAKPwRrO2f0Yz/wL9SNngfMcf8AhR+CAzjA82dmVYWPK62XRdy9LfoSAyztrhOMJzjGU+kU31ZkNFXwqziEJ5XEZThkWf2UYv8AsF6Nfaejh2bbC75DxDpkx/Yn6LV619oHs4jiRzcOdEpcvN1UvU13M1luJxbLrWLlTx40dOeyvfNNfd6DdTlGMXKbSiurbfcYcPMx8xSljWKai9PXoAywioQjGK0orSQWTjXCU5yUYxW229JILZwrrlZZJRjFbk29JL1nLTlf2syOSpzp4JVLzpLpLKa9C/d/19wefGojx9yxMBSo4FVa/CzT87KnvbX3HX001UUwqphGFcFqMYrSSNB2FjGHC8iEFqMcy1JepdDowEIYMBMh95bEwIENiAhiKZIFIr0EopAUikQi0A0MSGgAYhgaXtn9GM/8C/UjZ4HzHH/hR+CNZ2z+jGf+BfqRs8D5jj/wo/ACsrIrxqZXXSUYQW2azCx7eIZEeIZkNQXzel/7q/5mvWejJ4fZl50J5E4vFqScKl6ZetmxXcAHk4hgV51PJPcZx6wsXfBnrADSw4bmZjS4rfzVQelVX05/tl/8Mt+BHGyIZmJOvGjHpcn0hKCNlZZCuuU7JKEIrblJ6SRy+7+1t7S56uCVy+6WU18IgS529rr3CuUq+CVT85rpLJkvR9kf9fd1NNUKKoVVQjCuC1GMVpJHghwv5Lm13YHJVS1y3Va6Nehr7TZAc92J/u7L/wAbb8UdCc92I/u7L/xtvxR0ICAAYCYmMTAkllEsBSJKZIDRSZKGgKRaIKiBSGIAGMQwNR2ursu7OZ1dMJTm4LUYLbfnLuR4cbtPVVj1Vy4bxNuEIxesWXoR0oAc/wCVdPszin9LIflVT7M4p/SyN+MDn/Kqn2ZxT+lkenB47VmOzeJl49dUeadmRU64xX8zaW2RqrlZZJRhFNyk30SRy0Vd2syFKTnVwSuXRdYyypL/ANQNbxTjL43mxqnjZ74NB7//AAok3ktetruiburtLjU1xrq4VxOEIrUYxxJJJHQVVQqrjXVFQhFajGK0kiwOf8qqfZnFP6WQvKunf92cU/pZHQABz/YmNkeF3ytqsqc8qyajZFxenr0M6AAAQMBAAmNiYEksbEwJbENiAEUiEUgLQ0SMCxkooBgIYD6AzQylLy3qjzPl8XTet9N88T19pZOHZ/iEk2msebTT+wDZoN/ac12LyrVi2cNy5812NqcJN9Z1SW0/5PaNfh5d+f2xozOeXySxW1Y8d9JRh0cvt22wO0lGM4uMkpRa00+5oUIQhBRrjGMYrSUVpIo4jLzcnxvPjtdj+RYmTHEcd+a4dVKX/U0gO3ASalHa6pnN5EbOOceycGd1teBhKKshVNxd05LfVrrpIDpIyUltNP7hmh4ZgcDxeJKXDsmKyEpRdEcpz5vXuLb7tHp7TuUez3EXFtSWPJp+roBtdiOP4JDs1OzDdOVzZz01D5TY25621pvR2AAIAACWNkgIljZLATATYtgCZSZjTLQFpjRCLQFJlEbGmBYCQ2BpXRc+2NWQqrPArh8oOzlfLzc8em/WertFXZdwHiFVVcrLJ481GEY7cnruSMuRYq7PPzJV83VQUIv/AMEWWRrklPPmnrf7EXpfkBoeL8Oz1h8Py+G1zWY6FiXLle1CS72v3X8Wet8OeJxngleNVN4+Nj2QlYotpPS6t+t9WbbzvCKv5dNzlHmS5YdV6+4UpcrmnnyThrnXLDpvu9AC43kXY3Csm3EpndkcmqoQi5NyfRdEaPG7IQ8VRotz89Ode7Kle1W5Pv3H7zfLblYlmybr/b82HT/ImyzwcYuWfNc62vNj1Xr7gMHZmzJnwimvOqsryKd1S8JFrm5eikt96a0eHMrzOD8bv4jj4tuXiZcY+HhStzhKK1tL0rSNwoyVfhfls+TW+blh3fkTGxSrlZ8vmox724RWv+0Dn8KqOX2mws3C4PfhY9MbHdZZjqnmlJP0enqbvtHVZfwLPqprlOydEoxjBNtvXcZK5+F5nDPm+X9rzYrX39ArsV0uWGfNtLf7Eev+QGp4ZxVQhi474HxKFijGDsliain3b2dGeOEk4RtjnSnBvSfLHq993cewAFvQbJbAGxAxNgJksbJYEsWwbJ2AostMxJlJgZkykzGmUmBkTHsxplJgWmNMgpMDxqbx8q+VldjVmnGUIuXRLu+zqKFngLMhTpsl4WXNFxhvmWu5+o9uxpgahY91Lps8G5WUUJrX4usfyY5Y9sY3ucW7LI1Qm0t+dz7aX3LX5G2H6NAay6i2MsrIqrbnzNOK/wCJDlXw9AQVmM25RnFzpgo2KHNyNLTWjZ9AA80d2cO/2mMm5Q8+MV1/I8m77IJuNltVVkZRcocspJfZ6dM2nQO8DWZMJ5jtlTXOK8C4bmuVze09fkn+ZklN5NtHg6bI+Dk5Scoa0tPp8O49/QWwNRHHuqpx1CuXJZKDsgu+Ek+/+a1s2+xb6iAYhbFsBtkthslgDZLYNkNgJsWxNi2USi0ABFotABFUNAAFIaAAGhgACGu4YAAtjAAEwAAAAAQAAEsQgATZLAAIZLACoxsQAB//2Q=="
-                 alt="${productName}">
-                <h3>${productName}</h3>
-                <p>Category: ${product.CATEGORY || 'N/A'}</p>
-                <p>Sub Category: ${product.SUB_CATEGORY || 'N/A'}</p>
-                <p>Tags: ${product.TAGS || 'N/A'}</p>
-                <p>Collective Set: ${product.COLLECTIVE_SET || 'N/A'}</p>
-                ${isRecommendation ? 
-                    `<div>
-                        <div class="recommendation-details">
-                            <p><b>Reason:</b> ${product.recommendation_reason}</p>
-                            ${product.recommended_from_product_name ? 
-                                `<p><b>Inspired by:</b> ${product.recommended_from_product_name}</p>` : 
-                                ''
-                            }
-                        </div>
-                        <p style="font-weight: bold; color: #333; margin-top: 8px;">Score: ${product.similarity_score.toFixed(3)}</p>
-                    </div>` :
-                    `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>`
-                }
-            </div>`;
-        };
-        
+        const createProductCard = (product, isRecommendation = false) => { const productSku = product.SKU_CODE || product.recommended_sku_code; const productName = product.PRODUCT_Name; const isInCart = cart.some(item => item.sku === productSku); return ` <div class="product-card" data-sku="${productSku}"> <img src="data:image/jpeg;base64,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" alt="${productName}"> <h3>${productName}</h3> <p>Category: ${product.CATEGORY || 'N/A'}</p> <p>Sub Category: ${product.SUB_CATEGORY || 'N/A'}</p> <p>Tags: ${product.TAGS || 'N/A'}</p> <p>Collective Set: ${product.COLLECTIVE_SET || 'N/A'}</p> ${isRecommendation ? `<div> <div class="recommendation-details"> <p><b>Reason:</b> ${product.recommendation_reason}</p> ${product.recommended_from_product_name ? `<p><b>Inspired by:</b> ${product.recommended_from_product_name}</p>` : '' } </div> <p style="font-weight: bold; color: #333; margin-top: 8px;">Score: ${product.similarity_score.toFixed(3)}</p> </div>` : `<button class="add-to-cart-btn" data-sku="${productSku}" ${isInCart ? 'disabled' : ''}>${isInCart ? 'Added!' : 'Add to Cart'}</button>` } </div>`; };
         const renderCart = () => { if (cart.length === 0) { cartItemsContainer.innerHTML = '<p>Your cart is empty.</p>'; } else { cartItemsContainer.innerHTML = cart.map(item => ` <div class="cart-item"> <span>${item.name}</span> <button class="cart-item-remove-btn" data-sku="${item.sku}">&times; Remove</button> </div>`).join(''); } };
         const updateRecommendations = async () => { recommendationsGrid.innerHTML = '<p class="status">Loading recommendations...</p>'; const cartSkus = cart.map(i => i.sku); if (cartSkus.length === 0) { recommendationsGrid.innerHTML = '<p class="status">Add items to your cart to see recommendations!</p>'; return; } try { const response = await fetch('/cart_recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skus: cartSkus }) }); const data = await response.json(); if (data.recommendations && data.recommendations.length > 0) { recommendationsGrid.innerHTML = data.recommendations.map(p => createProductCard(p, true)).join(''); } else { recommendationsGrid.innerHTML = '<p class="status">No recommendations found for this combination.</p>'; } } catch (error) { recommendationsGrid.innerHTML = '<p class="status">Could not load recommendations.</p>'; console.error('Error fetching recommendations:', error); } };
         const updateCartView = () => { cartCountElement.innerText = cart.length; renderCart(); updateRecommendations(); };
         const fetchProducts = async () => { loadMoreBtn.disabled = true; loadMoreBtn.innerText = 'Loading...'; try { const response = await fetch(`/products?page=${currentPage}&size=${pageSize}`); const data = await response.json(); if (data.products && data.products.length > 0) { const productsHTML = data.products.map(p => createProductCard(p)).join(''); productGrid.insertAdjacentHTML('beforeend', productsHTML); totalProducts = data.total; currentPage++; if (productGrid.children.length >= totalProducts) { loadMoreBtn.style.display = 'none'; } } else { loadMoreBtn.style.display = 'none'; if(currentPage === 1) productGrid.innerHTML = '<p class="status">No products found in the database.</p>'; } } catch (error) { console.error('Error fetching products:', error); } finally { loadMoreBtn.disabled = false; loadMoreBtn.innerText = 'Load More'; } };
-        
+
+        // 3. ADD NEW FUNCTION TO FETCH DATA AND RENDER THE GRAPH
+        const fetchAndRenderModelEvaluation = async () => {
+            try {
+                const response = await fetch('/model_evaluation');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // The metric for Matrix Factorization is mean_squared_error
+                const mse = data.mean_squared_error;
+
+                const ctx = document.getElementById('evaluationChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar', // A bar chart is good for visualizing a single metric
+                    data: {
+                        labels: ['Mean Squared Error (MSE)'],
+                        datasets: [{
+                            label: 'Model Error',
+                            data: [mse],
+                            backgroundColor: 'rgba(0, 123, 255, 0.6)', // Primary color with transparency
+                            borderColor: 'rgba(0, 123, 255, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', // Makes the bar chart horizontal
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Error Value (Lower is Better)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false // Hide legend for single dataset
+                            },
+                            title: {
+                                display: true,
+                                text: 'Recommendation Model Training Error'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        label += context.raw.toFixed(4); // Format to 4 decimal places
+                                        return label + ' - This value represents the average error in the model\'s predictions. A lower value indicates a better model fit.';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Could not fetch or render model evaluation:", error);
+                const chartContainer = document.getElementById('evaluationChart').parentElement;
+                chartContainer.innerHTML = '<p class="status">Could not load model performance data.</p>';
+            }
+        };
+
+        // Event listeners remain the same
         loadMoreBtn.addEventListener('click', fetchProducts);
         cartIcon.addEventListener('click', () => cartModal.style.display = 'flex');
         closeCartBtn.addEventListener('click', () => cartModal.style.display = 'none');
@@ -146,7 +159,9 @@
         productGrid.addEventListener('click', (event) => { const button = event.target; if (button.tagName === 'BUTTON' && button.classList.contains('add-to-cart-btn')) { const card = button.closest('.product-card'); const sku = card.dataset.sku; const name = card.querySelector('h3').innerText; if (!cart.some(item => item.sku === sku)) { cart.push({ sku, name }); button.innerText = 'Added!'; button.disabled = true; updateCartView(); } } });
         cartItemsContainer.addEventListener('click', (event) => { if (event.target.classList.contains('cart-item-remove-btn')) { const skuToRemove = event.target.dataset.sku; cart = cart.filter(item => item.sku !== skuToRemove); const productCard = productGrid.querySelector(`.product-card[data-sku="${skuToRemove}"]`); if (productCard) { const button = productCard.querySelector('button'); button.innerText = 'Add to Cart'; button.disabled = false; } updateCartView(); } });
         
-        fetchProducts(); // Initial fetch
+        // Initial data fetches when the page loads
+        fetchProducts(); 
+        fetchAndRenderModelEvaluation(); // <-- Call the new function
     });
 </script>
 
